@@ -1,0 +1,24 @@
+{
+   "name": "curry-funcinfo",
+   "version": "0.0.1",
+    "author": "Michael Hanus <mh@informatik.uni-kiel.de>",
+    "synopsis": "A simple program to show analysis information about a function defined in some package.",
+    "category": [ "Programming" ],
+    "license": "BSD-3-Clause",
+    "licenseFile": "LICENSE",
+    "dependencies": {
+      "base"      : ">= 3.2.0, < 4.0.0",
+      "currypath" : ">= 3.0.0, < 4.0.0",
+      "directory" : ">= 3.0.0, < 4.0.0",
+      "filepath"  : ">= 3.0.0, < 4.0.0",
+      "process"   : ">= 3.0.0, < 4.0.0"
+  },
+  "executable": {
+    "name": "curry-funcinfo",
+    "main": "Main"
+  },
+  "source": {
+    "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/curry-info.git",
+    "tag": "$version"
+  }
+}
