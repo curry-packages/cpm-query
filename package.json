@@ -1,8 +1,8 @@
 {
-   "name": "curry-funcinfo",
+   "name": "cpm-query",
    "version": "0.0.1",
     "author": "Michael Hanus <mh@informatik.uni-kiel.de>",
-    "synopsis": "A simple program to show analysis information about a function defined in some package.",
+    "synopsis": "A tool to query analysis information about entities (e.g., function, types) defined in some Curry package.",
     "category": [ "Programming" ],
     "license": "BSD-3-Clause",
     "licenseFile": "LICENSE",
@@ -14,11 +14,11 @@
       "process"   : ">= 3.0.0, < 4.0.0"
   },
   "executable": {
-    "name": "curry-funcinfo",
-    "main": "Main"
+    "name": "cpm-query",
+    "main": "CPM.Query.Main"
   },
   "source": {
-    "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/curry-info.git",
+    "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/cpm-query.git",
     "tag": "$version"
   }
 }

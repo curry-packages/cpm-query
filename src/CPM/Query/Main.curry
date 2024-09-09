@@ -1,21 +1,22 @@
 ------------------------------------------------------------------------
---- A simple program to show analysis information about a function defined
---- in a module of some package.
+--- A tool to query analysis information about entities
+--- (e.g., function, types, type classes) defined in a module
+--- of some Curry package.
 --- 
---- To start the tool:
+--- To use the tool to show information about some function, run
 --- 
----     > curry-funcinfo <module name> <function name>
+---     > cpm-query <module name> <function name>
 ---
 --- For instance, try
 ---
----     > curry-funcinfo Data.List split
----     > cypm exec curry-funcinfo System.Process exitWith
----     > cypm exec curry-funcinfo System.Directory doesFileExist
+---     > cpm-query Data.List split
+---     > cypm exec cpm-query System.Process exitWith
+---     > cypm exec cpm-query System.Directory doesFileExist
 ---
 --- @version September 2024
 ------------------------------------------------------------------------
 
-module Main where
+module CPM.Query.Main where
 
 import Control.Monad      ( when )
 import Curry.Compiler.Distribution ( baseVersion )
@@ -29,22 +30,28 @@ import System.Directory   ( doesFileExist )
 import System.FilePath    ( joinPath, splitDirectories )
 import System.Process     ( exitWith, system )
 
+import CPM.Query.Options
+
 ---------------------------------------------------------------------
+
+banner :: String
+banner = unlines [bannerLine, bannerText, bannerLine]
+ where
+  bannerText = "CPM Query Tool (Version of 09/09/24)"
+  bannerLine = take (length bannerText) (repeat '=')
+
 main :: IO ()
 main = do
-  args <- getArgs
+  (opts,args) <- getArgs >>= processOptions banner
   case args of
-    [mn,fn] -> startInfoTool mn fn
+    [mn,fn] -> startQueryTool opts mn fn
     _       -> do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
                              usageText
                   exitWith 1
 
-usageText :: String
-usageText = "Usage: curry-funcinfo <module name> <function name>"
-
--- Start the information tool:
-startInfoTool :: String -> String -> IO ()
-startInfoTool mname fname = do
+-- Start the query tool:
+startQueryTool :: Options -> String -> String -> IO ()
+startQueryTool opts mname fname = do
   mbsrc <- lookupModuleSourceInLoadPath mname
   case mbsrc of
     Nothing -> error $ "Module '" ++ mname ++ "' not found!"
@@ -52,32 +59,34 @@ startInfoTool mname fname = do
       --putStrLn $ "DIR : " ++ dirname
       getPackageId dirname >>= maybe
         (putStrLn $
-           "Module '" ++ mname ++ "' stored in file:\n" ++
+           "Module '" ++ mname ++ "' stored in file\n  " ++
            filename ++
-           "\nbut no registered CPM package found having source directory:\n" ++
-           dirname)
+           "\nwhich does not belong to the sources of a registered CPM package!")
         (\(pname,vers) -> do
            -- do something with package, version, module, and function:
-           putStrLn $ "Package name   : " ++ pname
-           putStrLn $ "Package version: " ++ vers
-           putStrLn $ "Module name    : " ++ mname
-           putStrLn $ "Function name  : " ++ fname
-           let icmd = infoCmd pname vers 0
-           putStrLn $ "Executing: " ++ icmd
-           system icmd
-           ans <- askYesNo "Force computation of all properties? (No|yes) "
-           when (ans == "yes") $ do
-             let icmd = infoCmd pname vers 1
-             putStrLn $ "Executing: " ++ icmd
-             system icmd >> return ()
+           printWhenIntermediate opts $ unlines
+              [ "Package name   : " ++ pname
+              , "Package version: " ++ vers
+              , "Module name    : " ++ mname
+              , "Entity name    : " ++ fname
+              ]
+           let query = case optEntity opts of
+                 Operation -> [ "-o", enclose fname
+                              , "signature deterministic"
+                              , "totallyDefined termination" ]
+                 Type      -> [ "-t", enclose fname
+                              , "definition" ]
+                 TypeClass -> [ "-c", enclose fname
+                              , "definition" ]
+               icmd = unwords $
+                         [ "curry-info" ] ++
+                         (if optForce opts then ["-f1"] else []) ++
+                         [ "-p", pname, "-x", enclose vers
+                         , "-m", mname] ++ query
+           printWhenAll opts $ "Executing: " ++ icmd
+           system icmd >> return ()
         )
  where
-  infoCmd pname vers f =
-    unwords ["curry-info", "-f" ++ show f,
-             "-p", pname, "-x", enclose vers,
-             "-m", mname, "-o", enclose fname,
-             "signature totallyDefined deterministic termination"]
-
   enclose s = '"' : s ++ "\""
 
 -- Check whether a file path (a list of directory names) is part of a
@@ -117,22 +126,5 @@ getPackageId path =
   isVersionId vs = case split (=='.') vs of
     (maj:min:patch:_) -> all (all isDigit) [maj, min, take 1 patch]
     _                 -> False
-
-----------------------------------------------------------------------------
--- Axuiliaries:
-
--- Ask a question and return the answer which must be empty, `yes`, or `no`.
-askYesNo :: String -> IO String
-askYesNo question = do
-  putStr question
-  hFlush stdout
-  answer <- fmap (map toLower) getLine
-  if null answer
-    then return answer
-    else if answer `isPrefixOf` "yes"
-           then return "yes"
-           else if answer `isPrefixOf` "no"
-                  then return "no"
-                  else askYesNo question -- again
 
 ----------------------------------------------------------------------------
