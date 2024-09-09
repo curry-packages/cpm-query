@@ -72,7 +72,7 @@ startQueryTool opts mname fname = do
               ]
            let query = case optEntity opts of
                  Operation -> [ "-o", enclose fname
-                              , "signature deterministic"
+                              , "signature demandness deterministic"
                               , "totallyDefined termination" ]
                  Type      -> [ "-t", enclose fname
                               , "definition" ]
@@ -80,6 +80,7 @@ startQueryTool opts mname fname = do
                               , "definition" ]
                icmd = unwords $
                          [ "curry-info" ] ++
+                         (if optJSON opts then ["--output=json"] else []) ++
                          (if optForce opts then ["-f1"] else []) ++
                          [ "-p", pname, "-x", enclose vers
                          , "-m", mname] ++ query

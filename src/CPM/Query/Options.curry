@@ -28,11 +28,12 @@ data Options = Options
   , optHelp     :: Bool        -- if help info should be printed
   , optEntity   :: CurryEntity -- show the result for this function
   , optForce    :: Bool        -- force computation of analysis information?
+  , optJSON     :: Bool        -- output in JSON format?
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
-defaultOptions = Options 1 False Operation False
+defaultOptions = Options 1 False Operation False False
 
 --- Process the actual command line arguments and return the options
 --- and the name of the main program.
@@ -76,7 +77,10 @@ options =
            "show information about a type class"
   , Option "" ["force"]
             (NoArg (\opts -> opts { optForce = True }))
-           "force computation of properties?"
+           "force computation of properties"
+  , Option "" ["json"]
+            (NoArg (\opts -> opts { optJSON = True }))
+           "show output in JSON format"
   ]
  where
   safeReadNat opttrans s opts = case readNat s of
