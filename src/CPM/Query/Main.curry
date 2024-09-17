@@ -60,8 +60,8 @@ startQueryTool opts mname fname = do
       getPackageId dirname >>= maybe
         (putStrLn $
            "Module '" ++ mname ++ "' stored in file\n  " ++
-           filename ++
-           "\nwhich does not belong to the sources of a registered CPM package!")
+           filename ++ "\nbut this does not belong to the sources " ++
+           "of a registered CPM package!")
         (\(pname,vers) -> do
            -- do something with package, version, module, and function:
            printWhenIntermediate opts $ unlines
