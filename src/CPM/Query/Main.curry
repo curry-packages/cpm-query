@@ -81,7 +81,7 @@ startQueryTool opts mname fname = do
                icmd = unwords $
                          [ "curry-info" ] ++
                          (if optJSON opts then ["--output=json"] else []) ++
-                         (if optForce opts then ["-f1"] else []) ++
+                         (if optForce opts then ["-f1"] else ["-f0"]) ++
                          [ "-p", pname, "-x", enclose vers
                          , "-m", mname] ++ query
            printWhenAll opts $ "Executing: " ++ icmd
