@@ -37,7 +37,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 09/09/24)"
+  bannerText = "CPM Query Tool (Version of 19/09/24)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -72,15 +72,15 @@ startQueryTool opts mname fname = do
               ]
            let query = case optEntity opts of
                  Operation -> [ "-o", enclose fname
-                              , "signature demandness deterministic"
-                              , "totallyDefined termination" ]
+                              , "signature deterministic"
+                              , "totallyDefined termination demandness" ]
                  Type      -> [ "-t", enclose fname
                               , "definition" ]
                  TypeClass -> [ "-c", enclose fname
                               , "definition" ]
                icmd = unwords $
-                         [ "curry-info" ] ++
-                         (if optJSON opts then ["--output=json"] else []) ++
+                         [ "curry-info", "-v" ++ show (optVerb opts) ] ++
+                         [ "--output=" ++ optOutFormat opts ] ++
                          (if optForce opts then ["-f1"] else ["-f0"]) ++
                          [ "-p", pname, "-x", enclose vers
                          , "-m", mname] ++ query
@@ -88,7 +88,10 @@ startQueryTool opts mname fname = do
            system icmd >> return ()
         )
  where
-  enclose s = '"' : s ++ "\""
+  enclose s = '"' :  concatMap escapeBackslash s ++ "\""
+
+  escapeBackslash c | c == '\\' = "\\\\"
+                    | otherwise = [c]
 
 -- Check whether a file path (a list of directory names) is part of a
 -- package and return the package name and package version.
