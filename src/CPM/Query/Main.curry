@@ -13,7 +13,7 @@
 ---     > cypm exec cpm-query System.Process exitWith
 ---     > cypm exec cpm-query System.Directory doesFileExist
 ---
---- @version September 2024
+--- @version October 2024
 ------------------------------------------------------------------------
 
 module CPM.Query.Main where
@@ -56,7 +56,6 @@ startQueryTool opts mname fname = do
   case mbsrc of
     Nothing -> error $ "Module '" ++ mname ++ "' not found!"
     Just (dirname,filename) -> do
-      --putStrLn $ "DIR : " ++ dirname
       getPackageId dirname >>= maybe
         (putStrLn $
            "Module '" ++ mname ++ "' stored in file\n  " ++
@@ -93,23 +92,48 @@ startQueryTool opts mname fname = do
   escapeBackslash c | c == '\\' = "\\\\"
                     | otherwise = [c]
 
--- Check whether a file path (a list of directory names) is part of a
--- package and return the package name and package version.
--- For instance,
---
---     getPackageId "/home/joe/mytool/.cpm/packages/process-3.0.0/src"
---
--- returns
---
---     Just "process" "3.0.0"
---
--- For this purpose, it is checked whether there is a `package.json` file
--- under the directory and the directory name is a valid package id.
+--- Checks whether a module name is part of a package and
+--- returns the package name and package version.
+--- For instance, in a package containing a dependency to package
+--- `process` with version `3.0.0`, the call
+---
+---     getPackageIdOfModule "System.Process"
+---
+--- returns
+---
+---     Just "process" "3.0.0"
+---
+--- `Nothing` is returned if there is no package to which this module
+--- belongs.
+---
+--- For this purpose, the source file of the module is looked up
+--- (and an error is raised if this module cannot be found) and
+--- it is checked whether there is a `package.json` file under the
+--- directory of the source file and the directory name is a valid package id.
+getPackageIdOfModule :: String -> IO (Maybe (String,String))
+getPackageIdOfModule mname = do
+  mbsrc <- lookupModuleSourceInLoadPath mname
+  case mbsrc of
+    Nothing -> error $ "Module '" ++ mname ++ "' not found in load path!"
+    Just (dirname,_) -> getPackageId dirname
+
+--- Checks whether a file path (a list of directory names) is part of a
+--- package and returns the package name and package version.
+--- For instance,
+---
+---     getPackageId "/home/joe/mytool/.cpm/packages/process-3.0.0/src"
+---
+--- returns
+---
+---     Just "process" "3.0.0"
+---
+--- For this purpose, it is checked whether there is a `package.json` file
+--- under the directory and the directory name is a valid package id.
 getPackageId :: String -> IO (Maybe (String,String))
 getPackageId path =
   if sysLibPath == [path]
     then return (Just ("base",baseVersion))
-    else  checkPackageId (splitDirectories path)
+    else checkPackageId (splitDirectories path)
  where
   checkPackageId []             = return Nothing
   checkPackageId dirnames@(_:_) = do
