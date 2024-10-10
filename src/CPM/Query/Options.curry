@@ -29,12 +29,13 @@ data Options = Options
   , optHelp      :: Bool        -- if help info should be printed
   , optEntity    :: CurryEntity -- show the result for this function
   , optForce     :: Bool        -- force computation of analysis information?
+  , optRequest   :: String      -- specific request for the entity?
   , optOutFormat :: String      -- output format
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
-defaultOptions = Options 1 False Operation False "Text"
+defaultOptions = Options 1 False Operation False "" "Text"
 
 --- Process the actual command line arguments and return the options
 --- and the name of the main program.
@@ -79,6 +80,9 @@ options =
   , Option "" ["force"]
            (NoArg (\opts -> opts { optForce = True }))
            "force computation of properties"
+  , Option "" ["request"]
+           (ReqArg (\r opts -> opts { optRequest = r }) "<r>")
+           "specific request (e.g., definition)"
   , Option "" ["output"]
            (ReqArg checkFormat "<f>")
            "output format: Text (default), JSON, CurryTerm"

@@ -69,24 +69,30 @@ startQueryTool opts mname fname = do
               , "Module name    : " ++ mname
               , "Entity name    : " ++ fname
               ]
-           let query = case optEntity opts of
-                 Operation -> [ "-o", enclose fname
-                              , "signature deterministic"
-                              , "totallyDefined termination demandness" ]
-                 Type      -> [ "-t", enclose fname
-                              , "definition" ]
-                 TypeClass -> [ "-c", enclose fname
-                              , "definition" ]
+           let request = if null (optRequest opts) then dfltRequest
+                                                   else [optRequest opts]
                icmd = unwords $
                          [ "curry-info", "-v" ++ show (optVerb opts) ] ++
                          [ "--output=" ++ optOutFormat opts ] ++
                          (if optForce opts then ["-f1"] else ["-f0"]) ++
                          [ "-p", pname, "-x", enclose vers
-                         , "-m", mname] ++ query
+                         , "-m", mname] ++ entityParam ++ request
            printWhenAll opts $ "Executing: " ++ icmd
            system icmd >> return ()
         )
  where
+  entityParam = case optEntity opts of
+                  Operation -> [ "-o", enclose fname ]
+                  Type      -> [ "-t", enclose fname ]
+                  TypeClass -> [ "-c", enclose fname ]
+
+  -- the default requests for various entities:
+  dfltRequest = case optEntity opts of
+                  Operation -> [ "signature deterministic"
+                               , "totallyDefined termination demandness" ]
+                  Type      -> [ "definition" ]
+                  TypeClass -> [ "definition" ]
+
   enclose s = '"' :  concatMap escapeBackslash s ++ "\""
 
   escapeBackslash c | c == '\\' = "\\\\"
