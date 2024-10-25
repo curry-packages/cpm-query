@@ -16,19 +16,23 @@
 --- @version October 2024
 ------------------------------------------------------------------------
 
-module CPM.Query.Main where
+module CPM.Query.Main (main, askCurryInfoServer) where
 
-import Control.Monad      ( when )
+import Control.Monad      ( when, replicateM, replicateM_ )
 import Curry.Compiler.Distribution ( baseVersion )
-import Data.Char          ( isDigit, toLower )
-import Data.List          ( init, isPrefixOf, last, split )
+import Data.Char          ( isDigit )
+import Data.List          ( init, last, split )
 import System.Environment ( getArgs )
-import System.IO          ( hFlush, stdout )
+import System.IO          ( hFlush, stderr, hClose, hGetLine, hPutStrLn )
 
 import System.CurryPath   ( lookupModuleSourceInLoadPath, sysLibPath )
 import System.Directory   ( doesFileExist )
 import System.FilePath    ( joinPath, splitDirectories )
 import System.Process     ( exitWith, system )
+
+import System.IOExts (execCmd)
+
+import FlatCurry.Types (QName)
 
 import CPM.Query.Options
 
@@ -160,5 +164,74 @@ getPackageId path =
   isVersionId vs = case split (=='.') vs of
     (maj:min:patch:_) -> all (all isDigit) [maj, min, take 1 patch]
     _                 -> False
+
+--- This action starts curry-info in server mode and returns the result of the
+--- given request for the given module.
+--- The package and version and determined using the loadpath.
+--- If something goes wrong, Nothing is returned.
+askCurryInfoServer :: String -> String -> IO (Maybe [(QName, String)])
+askCurryInfoServer modname req = do
+    mres <- getPackageIdOfModule modname
+    case mres of
+        Nothing -> return Nothing
+        Just (pkg, vsn) -> do
+            (serverInput, serverOutput, serverErr) <- execCmd "curry-info --server &"
+
+            -- Get port
+            hGetLine serverOutput
+            portLine <- hGetLine serverOutput
+            let port = readPort portLine
+            hPutStrLn stderr port
+
+            -- Connect to server
+            (telnetInput, telnetOutput, telnetErr) <- execCmd $ "telnet localhost " ++ port
+
+            -- Skip first 4 lines of output
+            replicateM_ 4 (hGetLine telnetOutput)
+
+            -- Send requests
+            let msg = "RequestAllOperationsInformation curryterm 0 " ++ pkg ++ " " ++ vsn ++ " " ++ modname ++ " " ++ req
+            hPutStrLn telnetInput msg
+            hFlush telnetInput
+            resultMsg <- hGetLine telnetOutput
+
+            -- Shut down server
+            hPutStrLn telnetInput "StopServer"
+            hFlush telnetInput
+
+            result <- case words resultMsg of
+              ["ok", numberOfLines] -> do
+                ls <- replicateM (read numberOfLines) (hGetLine telnetOutput)
+                let results = read (unlines ls) :: [(String, String)]
+                fmap Just (mapM readResult results)
+
+              ("error":errmsg) -> do
+                hPutStrLn stderr $ "Error message: " ++ unwords errmsg
+                return Nothing
+
+              _ -> do
+                hPutStrLn stderr $ "Unexpected message: " ++ resultMsg
+                return Nothing
+              
+            -- Close handles
+            hClose serverInput
+            hClose serverOutput
+            hClose serverErr
+
+            hClose telnetInput
+            hClose telnetOutput
+            hClose telnetErr
+
+            return result
+
+            
+  where
+    readPort s = words s !! 2
+
+    readResult :: (String, String) -> IO (QName, String)
+    readResult (obj, res) = do
+      let (_, _, m, o) = read obj :: (String, String, String, String)
+      let [(_, result)] = read res :: [(String, String)]
+      return ((m, o), result)
 
 ----------------------------------------------------------------------------

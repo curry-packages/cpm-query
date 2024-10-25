@@ -1,17 +1,19 @@
 {
-   "name": "cpm-query",
-   "version": "0.0.1",
-    "author": "Michael Hanus <mh@informatik.uni-kiel.de>",
-    "synopsis": "A tool to query analysis information about entities (e.g., function, types) defined in some Curry package.",
-    "category": [ "Programming" ],
-    "license": "BSD-3-Clause",
-    "licenseFile": "LICENSE",
-    "dependencies": {
-      "base"      : ">= 3.2.0, < 4.0.0",
-      "currypath" : ">= 3.0.0, < 4.0.0",
-      "directory" : ">= 3.0.0, < 4.0.0",
-      "filepath"  : ">= 3.0.0, < 4.0.0",
-      "process"   : ">= 3.0.0, < 4.0.0"
+  "name": "cpm-query",
+  "version": "0.0.1",
+  "author": "Michael Hanus <mh@informatik.uni-kiel.de>",
+  "synopsis": "A tool to query analysis information about entities (e.g., function, types) defined in some Curry package.",
+  "category": [ "Programming" ],
+  "license": "BSD-3-Clause",
+  "licenseFile": "LICENSE",
+  "dependencies": {
+    "base": " >= 3.2.0,  < 4.0.0",
+    "currypath": " >= 3.0.0,  < 4.0.0",
+    "directory": " >= 3.0.0,  < 4.0.0",
+    "filepath": " >= 3.0.0,  < 4.0.0",
+    "process": " >= 3.0.0,  < 4.0.0",
+    "io-extra": " >= 3.0.0,  < 4.0.0",
+    "flatcurry": " >= 4.0.0,  < 5.0.0"
   },
   "executable": {
     "name": "cpm-query",
