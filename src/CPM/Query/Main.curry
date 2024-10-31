@@ -34,6 +34,8 @@ import System.IOExts (execCmd)
 
 import FlatCurry.Types (QName)
 
+import Network.Socket (connectToSocket, close)
+
 import CPM.Query.Options
 
 ---------------------------------------------------------------------
@@ -184,24 +186,17 @@ askCurryInfoServer modname req = do
             hPutStrLn stderr port
 
             -- Connect to server
-            (telnetInput, telnetOutput, telnetErr) <- execCmd $ "telnet localhost " ++ port
-
-            -- Skip first 4 lines of output
-            replicateM_ 4 (hGetLine telnetOutput)
+            handle <- connectToSocket "localhost" (read port)
 
             -- Send requests
             let msg = "RequestAllOperationsInformation curryterm 0 " ++ pkg ++ " " ++ vsn ++ " " ++ modname ++ " " ++ req
-            hPutStrLn telnetInput msg
-            hFlush telnetInput
-            resultMsg <- hGetLine telnetOutput
-
-            -- Shut down server
-            hPutStrLn telnetInput "StopServer"
-            hFlush telnetInput
+            hPutStrLn handle msg
+            hFlush handle
+            resultMsg <- hGetLine handle
 
             result <- case words resultMsg of
               ["ok", numberOfLines] -> do
-                ls <- replicateM (read numberOfLines) (hGetLine telnetOutput)
+                ls <- replicateM (read numberOfLines) (hGetLine handle)
                 let results = read (unlines ls) :: [(String, String)]
                 fmap Just (mapM readResult results)
 
@@ -212,15 +207,15 @@ askCurryInfoServer modname req = do
               _ -> do
                 hPutStrLn stderr $ "Unexpected message: " ++ resultMsg
                 return Nothing
+            
+            -- Shut down server
+            hPutStrLn handle "StopServer"
+            hFlush handle
               
             -- Close handles
             hClose serverInput
             hClose serverOutput
             hClose serverErr
-
-            hClose telnetInput
-            hClose telnetOutput
-            hClose telnetErr
 
             return result
 
