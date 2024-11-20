@@ -2,7 +2,7 @@
 --- The options of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version September 2024
+--- @version November 2024
 -------------------------------------------------------------------------
 
 module CPM.Query.Options
@@ -27,15 +27,15 @@ data Options = Options
   { optVerb      :: Int         -- verbosity (0: quiet, 1: status,
                                 --            2: intermediate, 3: all)
   , optHelp      :: Bool        -- if help info should be printed
-  , optEntity    :: CurryEntity -- show the result for this function
+  , optEntity    :: CurryEntity -- show the result for this kind of entity
   , optForce     :: Bool        -- force computation of analysis information?
-  , optRequest   :: String      -- specific request for the entity?
+  , optRequest   :: [String]    -- specific requests for the entity?
   , optOutFormat :: String      -- output format
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
-defaultOptions = Options 1 False Operation False "" "Text"
+defaultOptions = Options 1 False Operation False [] "Text"
 
 --- Process the actual command line arguments and return the options
 --- and the name of the main program.
@@ -81,8 +81,9 @@ options =
            (NoArg (\opts -> opts { optForce = True }))
            "force computation of properties"
   , Option "" ["request"]
-           (ReqArg (\r opts -> opts { optRequest = r }) "<r>")
-           "specific request (e.g., definition)"
+           (ReqArg (\r opts -> opts { optRequest = optRequest opts ++ [r] })
+                   "<r>")
+           "specific request (e.g., definition)\n(multiple options allowed)"
   , Option "" ["output"]
            (ReqArg checkFormat "<f>")
            "output format: Text (default), JSON, CurryTerm"

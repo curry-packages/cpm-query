@@ -13,7 +13,7 @@
 ---     > cypm exec cpm-query System.Process exitWith
 ---     > cypm exec cpm-query System.Directory doesFileExist
 ---
---- @version October 2024
+--- @version November 2024
 ------------------------------------------------------------------------
 
 module CPM.Query.Main (main, askCurryInfoServer) where
@@ -43,7 +43,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 19/09/24)"
+  bannerText = "CPM Query Tool (Version of 20/11/24)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -75,8 +75,8 @@ startQueryTool opts mname fname = do
               , "Module name    : " ++ mname
               , "Entity name    : " ++ fname
               ]
-           let request = if null (optRequest opts) then dfltRequest
-                                                   else [optRequest opts]
+           let request = if null (optRequest opts) then defaultRequest opts
+                                                   else optRequest opts
                icmd = unwords $
                          [ "curry-info", "-v" ++ show (optVerb opts) ] ++
                          [ "--output=" ++ optOutFormat opts ] ++
@@ -92,17 +92,18 @@ startQueryTool opts mname fname = do
                   Type      -> [ "-t", enclose fname ]
                   TypeClass -> [ "-c", enclose fname ]
 
-  -- the default requests for various entities:
-  dfltRequest = case optEntity opts of
-                  Operation -> [ "signature deterministic"
-                               , "totallyDefined termination demandness" ]
-                  Type      -> [ "definition" ]
-                  TypeClass -> [ "definition" ]
-
   enclose s = '"' :  concatMap escapeBackslash s ++ "\""
 
   escapeBackslash c | c == '\\' = "\\\\"
                     | otherwise = [c]
+
+-- The default requests for various kinds entities.
+defaultRequest :: Options -> [String]
+defaultRequest opts = case optEntity opts of
+  Operation -> [ "signature", "cass-deterministic", "cass-total"
+               , "cass-terminating", "cass-demand" ]
+  Type      -> [ "definition" ]
+  TypeClass -> [ "definition" ]
 
 --- Checks whether a module name is part of a package and
 --- returns the package name and package version.
