@@ -30,6 +30,7 @@ import System.CurryPath   ( lookupModuleSourceInLoadPath, setCurryPath
 import System.Directory   ( doesFileExist, getCurrentDirectory
                           , getModificationTime )
 import System.FilePath    ( (</>), joinPath, splitDirectories )
+import System.Path        ( fileInPath )
 import System.Process     ( exitWith, system )
 
 import System.IOExts      ( evalCmd, execCmd, readCompleteFile )
@@ -50,6 +51,7 @@ banner = unlines [bannerLine, bannerText, bannerLine]
 
 main :: IO ()
 main = do
+  checkExecutable
   (opts,args) <- getArgs >>= processOptions banner
   when (optEntity opts == Unknown) $ do
     printWhenStatus opts $
@@ -62,6 +64,16 @@ main = do
     _       -> do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
                              usageText
                   exitWith 1
+ where
+  checkExecutable = do
+    hascurryinfo <- fileInPath "curry-info"
+    unless hascurryinfo $ do
+      putStrLn $ "Binary 'curry-info' not found in PATH!\n" ++
+        "Install it by the the following commands:\n\n" ++
+        "> git clone https://git.ps.informatik.uni-kiel.de/curry-packages/curry-info-system.git\n" ++
+        "> cd curry-info-system\n" ++
+        "> cypm install"
+      exitWith 1
 
 -- Start the tool to generate analysis information for a package:
 generateForPackage:: Options -> String -> String -> IO ()
