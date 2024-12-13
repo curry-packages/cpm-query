@@ -46,7 +46,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 12/12/24)"
+  bannerText = "CPM Query Tool (Version of 13/12/24)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -70,7 +70,7 @@ main = do
     unless hascurryinfo $ do
       putStrLn $ "Binary 'curry-info' not found in PATH!\n" ++
         "Install it by the the following commands:\n\n" ++
-        "> git clone https://git.ps.informatik.uni-kiel.de/curry-packages/curry-info-system.git\n" ++
+        "> git clone https://github.com/curry-language/curry-info-system.git\n" ++
         "> cd curry-info-system\n" ++
         "> cypm install"
       exitWith 1
@@ -82,7 +82,7 @@ generateForPackage opts pkg vsn = do
     "Generating information for package '" ++ pkg ++ "-" ++ vsn ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
-  mods <- getPackageModules opts pkg vsn
+  mods <- getPackageInfos opts pkg vsn ["modules"]
   mapM_ (generateForModule opts pkg vsn) mods
 
 generateForModule :: Options -> String -> String -> String -> IO ()
@@ -91,21 +91,25 @@ generateForModule opts pkg vsn mn = do
   let cicmd = [curryInfoVerb opts, "-f2", "-p", pkg, "-x", enclose vsn, "-m", mn]
   runCommand opts $ unwords $ cicmd ++ ["--alltypeclasses"]
   runCommand opts $ unwords $ cicmd ++ ["--alltypes"]
-  ops <- getModuleOperations opts pkg vsn mn
+  ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
   unless (null ops) $ do
     let opreqs = defaultRequest (opts { optEntity = Operation })
     mapM_ (\r -> runCommand opts $ unwords $
                    cicmd ++ ["-o", enclose (head ops), r])
           (opreqs)
 
--- Compute the modules of a package by `curry-info`:
-getPackageModules :: Options -> String -> String -> IO [String]
-getPackageModules opts pkg vsn = do
+--- Computes some information of a package version by `curry-info`.
+--- In case of a parse error, the program is terminated with an error state.
+--- The final parameter is the list of paramters passed to `curry-info` after
+--- the package and version options to specify a _single_ request.
+--- For instance, these can be:
+--- * To get all modules: `["modules"]`
+--- * To get all operations in module `mn`: `["-m", mn, "operations"]`
+getPackageInfos :: Read a => Options -> String -> String -> [String] -> IO a
+getPackageInfos opts pkg vsn requests = do
   printWhenStatus opts $ "Generating information for package '" ++
                          pkg ++ "-" ++ vsn ++ "'..."
-  let cmdopts = [ "-v" ++ show (optVerb opts)
-                , "--output=CurryTerm", "-p", pkg, "-x", vsn
-                , "modules"]
+  let cmdopts = ["-v0", "--output=CurryTerm", "-p", pkg, "-x", vsn] ++ requests
   printWhenAll opts $ unwords $ ["Executing:", curryInfoBin] ++ cmdopts
   (ec,sout,serr) <- evalCmd curryInfoBin cmdopts ""
   printWhenAll opts $ "Exit code: " ++ show ec ++ "\nSTDOUT:\n" ++ sout ++
@@ -118,50 +122,16 @@ getPackageModules opts pkg vsn = do
                _ -> putStrLn ("Parse error for: " ++ sout) >> exitWith 1
   -- the info string is a pair of requests and results as strings:
   let infos = snd (head resterm)
-  infoterm <- case reads infos of
-               [(ms,_)] -> return (ms :: [(String,String)])
-               _ -> putStrLn ("Parse error for: " ++ infos) >> exitWith 1
+  infolist <- case reads infos of
+                [(ms,_)] -> return (ms :: [(String,String)])
+                _ -> putStrLn ("Parse error for: " ++ infos) >> exitWith 1
   -- finally, the (first) result string is a list of module names:
-  let mods = snd (head infoterm)
-  modules <- case reads mods of
-               [(ms,_)] -> return (ms :: [String])
-               _ -> putStrLn ("Parse error for: " ++ mods) >> exitWith 1
-  printWhenStatus opts $ "Modules: " ++ unwords modules
-  return modules
+  let infostring = snd (head infolist)
+  case reads infostring of
+    [(ms,_)] -> return ms
+    _        -> putStrLn ("Parse error for: " ++ infostring) >> exitWith 1
 
--- Compute the operations of a module of a package by `curry-info`:
-getModuleOperations :: Options -> String -> String -> String -> IO [String]
-getModuleOperations opts pkg vsn mn = do
-  printWhenStatus opts $ "Generating information for package '" ++
-                         pkg ++ "-" ++ vsn ++ "'..."
-  let cmdopts = [ "-v" ++ show (optVerb opts)
-                , "--output=CurryTerm", "-p", pkg, "-x", vsn, "-m", mn
-                , "operations"]
-  printWhenAll opts $ unwords $ ["Executing:", curryInfoBin] ++ cmdopts
-  (ec,sout,serr) <- evalCmd curryInfoBin cmdopts ""
-  printWhenAll opts $ "Exit code: " ++ show ec ++ "\nSTDOUT:\n" ++ sout ++
-                      "\nSTDERR:\n" ++ serr
-  when (ec > 0) $ putStrLn "ERROR OCCURRED" >> exitWith 1
-  -- Now we parse the output of curry-info:
-  -- curry-info returns a list of strings pairs (package string, info string):
-  resterm <- case reads sout of
-               [(ms,_)] -> return (ms :: [(String,String)])
-               _ -> putStrLn ("Parse error for: " ++ sout) >> exitWith 1
-  -- the info string is a pair of requests and results as strings:
-  let infos = snd (head resterm)
-  infoterm <- case reads infos of
-               [(ms,_)] -> return (ms :: [(String,String)])
-               _ -> putStrLn ("Parse error for: " ++ infos) >> exitWith 1
-  -- finally, the (first) result string is a list of module names:
-  let mods = snd (head infoterm)
-  operations <- case reads mods of
-                  [(ms,_)] -> return (ms :: [String])
-                  _ -> putStrLn ("Parse error for: " ++ mods) >> exitWith 1
-  printWhenStatus opts $ "Operations of module '" ++ mn ++ "':\n" ++
-                         unwords operations
-  return operations
-
--- The binary name of the curry-info tool.
+--- The binary name of the curry-info tool.
 curryInfoBin :: String
 curryInfoBin = "curry-info"
 
@@ -202,7 +172,7 @@ startQueryTool opts mname ename = do
                           else show (optEntity opts) ++ " " ++
                                mname ++ "." ++ ename ++
                                " (package " ++ pname ++ "-" ++ vers ++ ")"
-           printWhenStatus opts $ edescr
+           putStrLn edescr
            let request = if null (optRequest opts) then defaultRequest opts
                                                    else optRequest opts
                icmd = unwords $

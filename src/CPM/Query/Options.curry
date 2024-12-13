@@ -14,6 +14,7 @@ module CPM.Query.Options
 
 import Control.Monad         ( when, unless )
 import Data.Char             ( toLower )
+import Data.List             ( findIndices, isPrefixOf )
 import Numeric               ( readNat )
 import System.Console.GetOpt
 
@@ -70,7 +71,7 @@ options =
            "print help and exit"
   , Option "q" ["quiet"]
            (NoArg (\opts -> opts { optVerb = 0 }))
-           "run quietly (no status output, only exit code)"
+           "run quietly (no output beside info result)"
   , Option "v" ["verbosity"]
            (OptArg (maybe (checkVerb 2) (safeReadNat checkVerb)) "<n>")
            "verbosity level:\n0: quiet (same as `-q')\n1: show status messages (default)\n2: show more details (same as `-v')\n3: show all details"
@@ -121,9 +122,14 @@ options =
    where opts' = opts { optCLS = k }
 
   checkFormat f opts =
-    if map toLower f `elem` ["text", "json", "curryterm"]
-      then opts { optOutFormat = f }
-      else error "Illegal output format (try `-h' for help)"
+    case findIndices (map toLower f `isPrefixOf`)
+                     (map (map toLower) outputFormats) of
+      []  -> error "Illegal output format (try `-h' for help)"
+      [i] -> opts { optOutFormat = outputFormats !! i }
+      _   -> error "Output format ambiguous (try `-h' for help)"
+
+outputFormats :: [String]
+outputFormats = ["Text", "JSON", "CurryTerm"]
 
 -------------------------------------------------------------------------
 
