@@ -1,6 +1,6 @@
 {
   "name": "cpm-query",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "author": "Michael Hanus <mh@informatik.uni-kiel.de>",
   "synopsis": "A tool to query analysis information about entities (e.g., function, types) defined in some Curry package.",
   "category": [ "Programming" ],

@@ -16,7 +16,7 @@
 --- @version December 2024
 ------------------------------------------------------------------------
 
-module CPM.Query.Main (main, askCurryInfoServer) where
+module CPM.Query.Main (main, askCurryInfoServer, askCurryInfoCmd) where
 
 import Control.Monad      ( unless, when, replicateM, replicateM_ )
 import Curry.Compiler.Distribution ( baseVersion )
@@ -305,67 +305,117 @@ setCurryPathIfNecessary = do
 packageSpecFile :: String
 packageSpecFile = "package.json"
 
---- This action starts curry-info in server mode and returns the result of the
---- given request for the given module.
---- The package and version and determined using the loadpath.
+------------------------------------------------------------------------------
+--- This action starts `curry-info` in server mode and returns the result
+--- of the given request (third argument) for all operations in the module
+--- provided as the first argument. The requested result is returned in its
+--- string representation for each entity in the module.
+--- The second argument is the kind of entity to be queried.
+--- If it is `Unknown`, `Nothing` is returned.
+---
+--- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
-askCurryInfoServer :: String -> String -> IO (Maybe [(QName, String)])
-askCurryInfoServer modname req = do
+askCurryInfoServer :: String -> CurryEntity -> String
+                   -> IO (Maybe [(QName, String)])
+askCurryInfoServer modname entkind req
+  | entkind == Unknown = return Nothing
+  | otherwise = do
     mres <- getPackageIdOfModule modname
     case mres of
-        Nothing -> return Nothing
-        Just (pkg, vsn) -> do
-            (srvin, srvout, srverr) <- execCmd "curry-info --server &"
+      Nothing -> return Nothing
+      Just (pkg, vsn) -> do
+        -- Note: force=0 is important to avoid loops if the analysis tools
+        -- also use `curry-info`!
+        (srvin, srvout, srverr) <- execCmd "curry-info --quiet -f0 --server &"
 
-            -- Get port
-            hGetLine srvout
-            portLine <- hGetLine srvout
-            let port = readPort portLine
-            hPutStrLn stderr port
+        -- Get port
+        port <- fmap readPort (hGetLine srvout)
+        hPutStrLn stderr $ "Connecting to port " ++ port
 
-            -- Connect to server
-            handle <- connectToSocket "localhost" (read port)
+        -- Connect to server
+        handle <- connectToSocket "localhost" (read port)
 
-            -- Send requests
-            let msg = "RequestAllOperationsInformation curryterm 0 " ++ pkg ++
-                      " " ++ vsn ++ " " ++ modname ++ " " ++ req
-            hPutStrLn handle msg
-            hFlush handle
-            resultMsg <- hGetLine handle
+        -- Send requests
+        let srvcmd = case entkind of
+                       Type      -> "RequestAllTypesInformation"
+                       TypeClass -> "RequestAllTypeclassesInformation"
+                       _         -> "RequestAllOperationsInformation"
+        let msg = srvcmd ++ " curryterm 0 " ++ pkg ++ " " ++ vsn ++ " " ++
+                  modname ++ " " ++ req
+        hPutStrLn handle msg
+        hFlush handle
+        resultMsg <- hGetLine handle
 
-            result <- case words resultMsg of
-              ["ok", numberOfLines] -> do
-                ls <- replicateM (read numberOfLines) (hGetLine handle)
-                let results = read (unlines ls) :: [(String, String)]
-                fmap Just (mapM readResult results)
+        result <- case words resultMsg of
+          ["ok", numberOfLines] -> do
+            ls <- replicateM (read numberOfLines) (hGetLine handle)
+            let results = read (unlines ls) :: [(String, String)]
+            fmap Just (mapM readResult results)
+          ("error":errmsg) -> do
+            hPutStrLn stderr $ "Error message: " ++ unwords errmsg
+            return Nothing
+          _ -> do hPutStrLn stderr $ "Unexpected message: " ++ resultMsg
+                  return Nothing
+        
+        -- Shut down server
+        hPutStrLn handle "StopServer"
+        hFlush handle
+        -- Close handles
+        hClose srvin
+        hClose srvout
+        hClose srverr
 
-              ("error":errmsg) -> do
-                hPutStrLn stderr $ "Error message: " ++ unwords errmsg
-                return Nothing
-
-              _ -> do
-                hPutStrLn stderr $ "Unexpected message: " ++ resultMsg
-                return Nothing
+        return result
             
-            -- Shut down server
-            hPutStrLn handle "StopServer"
-            hFlush handle
-              
-            -- Close handles
-            hClose srvin
-            hClose srvout
-            hClose srverr
+ where
+  readPort s = words s !! 2 -- First line of server: "Server Port: <n>"
 
-            return result
+  readResult :: (String, String) -> IO (QName, String)
+  readResult (obj, res) = do
+    let (m, o) = read obj :: (String, String)
+        [(_, result)] = read res :: [(String, String)]
+    return ((m, o), result)
 
-            
-  where
-    readPort s = words s !! 2
+------------------------------------------------------------------------------
+--- This action uses the `curry-info` command to return the result
+--- of the given request (third argument) for all operations in the module
+--- provided as the first argument. The requested result is returned in its
+--- string representation for each entity in the module.
+--- The second argument is the kind of entity to be queried.
+--- If it is `Unknown`, `Nothing` is returned.
+--- 
+--- The package and version are determined using the Curry loadpath.
+--- If something goes wrong, Nothing is returned.
+askCurryInfoCmd :: String -> CurryEntity -> String
+               -> IO (Maybe [(QName, String)])
+askCurryInfoCmd modname entkind req
+  | entkind == Unknown = return Nothing
+  | otherwise = do
+    mres <- getPackageIdOfModule modname
+    case mres of
+      Nothing -> return Nothing
+      Just (pkg, vsn) -> do
+        -- Note: force=0 is important to avoid loops if the analysis tools
+        -- also use `curry-info`!
+        let alloption  = case entkind of Type      -> "--alltypes"
+                                         TypeClass -> "--alltypeclasses"
+                                         _         -> "--alloperations"
+            cmdopts    = [ "--quiet", "-f0", "-p", pkg, "-x", vsn, "-m", modname
+                         , alloption, "--output=CurryTerm", req]
+        (ec, out, err) <- evalCmd "curry-info" cmdopts ""
 
-    readResult :: (String, String) -> IO (QName, String)
-    readResult (obj, res) = do
-      let (_, _, m, o) = read obj :: (String, String, String, String)
-      let [(_, result)] = read res :: [(String, String)]
-      return ((m, o), result)
+        if ec > 0
+          then do putStrLn "Execution error. Output:"
+                  unless (null out) $ putStrLn out
+                  unless (null err) $ putStrLn err
+                  return Nothing
+          else do let results = read out :: [(String, String)]
+                  fmap Just (mapM readResult results)
+ where
+  readResult :: (String, String) -> IO (QName, String)
+  readResult (obj, res) = do
+    let (m, o) = read obj :: (String, String)
+        [(_, result)] = read res :: [(String, String)]
+    return ((m, o), result)
 
 ----------------------------------------------------------------------------
