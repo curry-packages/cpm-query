@@ -18,3 +18,11 @@ or
 
 or
     > cpm-query --typeclass <module name> <typeclass name>
+
+Note that `cypm exec` is not necessary to invoke the tool inside
+a package since the load path is automatically computed by this tool.
+For instance, try (inside this package)
+
+    > cpm-query Data.List split
+    > cpm-query System.Process exitWith
+    > cpm-query System.Directory doesFileExist

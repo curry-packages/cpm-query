@@ -100,7 +100,7 @@ options =
            (ReqArg (\r opts -> opts { optRequest = optRequest opts ++ [r] })
                    "<r>")
            "specific request (e.g., definition)\n(multiple options allowed)"
-  , Option "" ["output"]
+  , Option "" ["format"]
            (ReqArg checkFormat "<f>")
            "output format: Text (default), JSON, CurryTerm"
   ]

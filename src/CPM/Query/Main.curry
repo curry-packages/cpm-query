@@ -7,11 +7,12 @@
 --- 
 ---     > cpm-query <module name> <function name>
 ---
---- For instance, try
+--- Note that `cypm exec` is not necessary to invoke the tool since
+--- the load path is computed by this tool. For instance, try
 ---
 ---     > cpm-query Data.List split
----     > cypm exec cpm-query System.Process exitWith
----     > cypm exec cpm-query System.Directory doesFileExist
+---     > cpm-query System.Process exitWith
+---     > cpm-query System.Directory doesFileExist
 ---
 --- @version December 2024
 ------------------------------------------------------------------------
@@ -121,7 +122,7 @@ getPackageInfos :: Read a => Options -> String -> String -> [String] -> IO a
 getPackageInfos opts pkg vsn requests = do
   printWhenStatus opts $ "Generating infos for package '" ++ pkg ++ "-" ++ vsn
                          ++ "' for requests: " ++ unwords requests
-  let cmdopts = ["-v0", "--output=CurryTerm", "-p", pkg, "-x", vsn] ++ requests
+  let cmdopts = ["-v0", "--format=CurryTerm", "-p", pkg, "-x", vsn] ++ requests
   printWhenAll opts $ unwords $ ["Executing:", curryInfoBin] ++ cmdopts
   (ec,sout,serr) <- evalCmd curryInfoBin cmdopts ""
   printWhenAll opts $ "Exit code: " ++ show ec ++ "\nSTDOUT:\n" ++ sout ++
@@ -189,7 +190,7 @@ startQueryTool opts mname ename = do
                                                    else optRequest opts
                icmd = unwords $
                          [ curryInfoVerb opts ] ++
-                         [ "--output=" ++ optOutFormat opts ] ++
+                         [ "--format=" ++ optOutFormat opts ] ++
                          (if optForce opts then ["-f1"] else ["-f0"]) ++
                          [ "-p", pname, "-x", escapeShellString vers
                          , "-m", mname] ++ entityParam ++ request
@@ -414,7 +415,7 @@ askCurryInfoCmd modname entkind req
                                          TypeClass -> "--alltypeclasses"
                                          _         -> "--alloperations"
             cmdopts    = [ "--quiet", "-f0", "-p", pkg, "-x", vsn, "-m", modname
-                         , alloption, "--output=CurryTerm", req]
+                         , alloption, "--format=CurryTerm", req]
         (ec, out, err) <- evalCmd "curry-info" cmdopts ""
 
         if ec > 0
