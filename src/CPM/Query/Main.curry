@@ -16,7 +16,9 @@
 --- @version December 2024
 ------------------------------------------------------------------------
 
-module CPM.Query.Main (main, askCurryInfoServer, askCurryInfoCmd) where
+module CPM.Query.Main
+  ( main, askCurryInfoServer, askCurryInfoCmd)
+ where
 
 import Control.Monad      ( unless, when, replicateM, replicateM_ )
 import Curry.Compiler.Distribution ( baseVersion )
@@ -46,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 13/12/24)"
+  bannerText = "CPM Query Tool (Version of 14/12/24)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -79,7 +81,7 @@ main = do
 generateForPackage:: Options -> String -> String -> IO ()
 generateForPackage opts pkg vsn = do
   printWhenStatus opts $
-    "Generating information for package '" ++ pkg ++ "-" ++ vsn ++ "' for " ++
+    "Generating infos for package '" ++ pkg ++ "-" ++ vsn ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
   mods <- getPackageInfos opts pkg vsn ["modules"]
@@ -87,16 +89,26 @@ generateForPackage opts pkg vsn = do
 
 generateForModule :: Options -> String -> String -> String -> IO ()
 generateForModule opts pkg vsn mn = do
-  printWhenStatus opts $ "Generating analysis data for module '" ++ mn ++ "'..."
-  let cicmd = [curryInfoVerb opts, "-f2", "-p", pkg, "-x", enclose vsn, "-m", mn]
-  runCommand opts $ unwords $ cicmd ++ ["--alltypeclasses"]
-  runCommand opts $ unwords $ cicmd ++ ["--alltypes"]
+  genInfo ""
+  let cicmd = [ curryInfoVerb opts, "-f2", "-p", pkg, "-x"
+              , escapeShellString vsn, "-m", mn]
+  let tcreq = "--alltypeclasses" : defaultRequest (opts {optEntity = TypeClass})
+  genInfo (unwords tcreq)
+  runCommand opts $ unwords $ cicmd ++ tcreq
+  let treq = "--alltypes": defaultRequest (opts { optEntity = Type })
+  genInfo (unwords treq)
+  runCommand opts $ unwords $ cicmd ++ treq
   ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
   unless (null ops) $ do
     let opreqs = defaultRequest (opts { optEntity = Operation })
-    mapM_ (\r -> runCommand opts $ unwords $
-                   cicmd ++ ["-o", enclose (head ops), r])
+    mapM_ (\r -> do genInfo ("alloperations " ++ r)
+                    runCommand opts $ unwords $
+                      cicmd ++ ["-o", escapeShellString (head ops), r])
           (opreqs)
+  where
+   genInfo req = printWhenStatus opts $
+     "Generating infos for module '" ++ mn ++
+     (if null req then "" else "' and request '" ++ req) ++ "'..."
 
 --- Computes some information of a package version by `curry-info`.
 --- In case of a parse error, the program is terminated with an error state.
@@ -107,8 +119,8 @@ generateForModule opts pkg vsn mn = do
 --- * To get all operations in module `mn`: `["-m", mn, "operations"]`
 getPackageInfos :: Read a => Options -> String -> String -> [String] -> IO a
 getPackageInfos opts pkg vsn requests = do
-  printWhenStatus opts $ "Generating information for package '" ++
-                         pkg ++ "-" ++ vsn ++ "'..."
+  printWhenStatus opts $ "Generating infos for package '" ++ pkg ++ "-" ++ vsn
+                         ++ "' for requests: " ++ unwords requests
   let cmdopts = ["-v0", "--output=CurryTerm", "-p", pkg, "-x", vsn] ++ requests
   printWhenAll opts $ unwords $ ["Executing:", curryInfoBin] ++ cmdopts
   (ec,sout,serr) <- evalCmd curryInfoBin cmdopts ""
@@ -179,22 +191,23 @@ startQueryTool opts mname ename = do
                          [ curryInfoVerb opts ] ++
                          [ "--output=" ++ optOutFormat opts ] ++
                          (if optForce opts then ["-f1"] else ["-f0"]) ++
-                         [ "-p", pname, "-x", enclose vers
+                         [ "-p", pname, "-x", escapeShellString vers
                          , "-m", mname] ++ entityParam ++ request
            runCommand opts icmd
         )
  where
   entityParam = case optEntity opts of
-                  Operation     -> [ "-o", enclose ename ]
-                  Type          -> [ "-t", enclose ename ]
-                  TypeClass     -> [ "-c", enclose ename ]
+                  Operation     -> [ "-o", escapeShellString ename ]
+                  Type          -> [ "-t", escapeShellString ename ]
+                  TypeClass     -> [ "-c", escapeShellString ename ]
                   Unknown       -> []
 
-enclose :: String -> String
-enclose s = '"' : concatMap escapeBackslash s ++ "\""
+-- Escape a string to use it in a shell command.
+escapeShellString :: String -> String
+escapeShellString s = '\'' : concatMap escapeSingleQuote s ++ "'"
  where
-  escapeBackslash c | c == '\\' = "\\\\"
-                    | otherwise = [c]
+  escapeSingleQuote c | c == '\'' = "'\\\''"
+                      | otherwise = [c]
 
 -- The default requests for various kinds entities.
 defaultRequest :: Options -> [String]
