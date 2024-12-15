@@ -22,7 +22,7 @@
     "main": "CPM.Query.Main"
   },
   "source": {
-    "git": "https://git.ps.informatik.uni-kiel.de/curry-packages/cpm-query.git",
+    "git": "https://github.com/curry-packages/cpm-query.git",
     "tag": "$version"
   }
 }

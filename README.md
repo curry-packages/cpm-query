@@ -7,8 +7,13 @@ defined in a module of some Curry package.
 
 The tool is based and, therefore, requires the executable `curry-info`
 to manage various Curry analysis tools.
+`curry-info` can be installed as follows:
 
-To start the tool:
+    > git clone https://github.com/curry-language/curry-info-system.git
+    > cd curry-info-system
+    > cypm install
+
+To start the `cpm-query` tool:
 
     > cpm-query <module name> <function name>
 
