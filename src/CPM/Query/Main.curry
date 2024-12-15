@@ -101,7 +101,12 @@ generateForModule opts pkg vsn mn = do
   runCommand opts $ unwords $ cicmd ++ treq
   ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
   unless (null ops) $ do
+    mapM_ (\r -> do genInfo ("alloperations " ++ r)
+                    runCommand opts $ unwords $ cicmd ++ ["--alloperations", r])
+          ["signature", "definition"]
     let opreqs = defaultRequest (opts { optEntity = Operation })
+    -- other operation analysis requests are only computed for the first
+    -- operation since this implicitly set the analysis results for all ops
     mapM_ (\r -> do genInfo ("alloperations " ++ r)
                     runCommand opts $ unwords $
                       cicmd ++ ["-o", escapeShellString (head ops), r])
