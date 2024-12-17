@@ -14,14 +14,14 @@ module CPM.Query.Options
 
 import Control.Monad         ( when, unless )
 import Data.Char             ( toLower )
-import Data.List             ( findIndices, isPrefixOf )
+import Data.List             ( findIndices, isPrefixOf, splitOn )
 import Numeric               ( readNat )
 import System.Console.GetOpt
 
 import System.Process        ( exitWith )
 
 --- The kind of entity of a Curry module to be queried.
-data CurryEntity = Operation | Type | TypeClass | Unknown
+data CurryEntity = Operation | Type | Class | Unknown
   deriving (Eq, Show)
 
 -- The options of the query tool.
@@ -81,12 +81,12 @@ options =
   , Option "t" ["type"]
            (NoArg (\opts -> opts { optEntity = Type }))
           "show information about a type"
-  , Option "c" ["typeclass"]
-           (NoArg (\opts -> opts { optEntity = TypeClass }))
+  , Option "c" ["class"]
+           (NoArg (\opts -> opts { optEntity = Class }))
            "show information about a type class"
   , Option "" ["clskind"]
            (ReqArg checkKind "<k>")
-           "entity kind provided by the Curry language server\n(ValueFunction|TypeData|TypeClass|...)"
+           "entity kind provided by the Curry language server\n(ValueFunction|TypeData|Class|...)"
   , Option "" ["force"]
            (NoArg (\opts -> opts { optForce = True }))
            "force computation of properties"
@@ -97,9 +97,10 @@ options =
            (NoArg (\opts -> opts { optGenerate = True }))
            "generate analysis infos for a package version"
   , Option "" ["request"]
-           (ReqArg (\r opts -> opts { optRequest = optRequest opts ++ [r] })
+           (ReqArg (\r opts -> opts { optRequest = optRequest opts ++
+                                                   splitOn "," r })
                    "<r>")
-           "specific request (e.g., definition)\n(multiple options allowed)"
+           "specific request (e.g., definition)\n(separate multiple requests by comma)"
   , Option "" ["format"]
            (ReqArg checkFormat "<f>")
            "output format: Text (default), JSON, CurryTerm"
@@ -117,7 +118,7 @@ options =
     | k == "ValueFunction" = opts' { optEntity = Operation }
     | k == "TypeData"      = opts' { optEntity = Type }
     | k == "TypeAlias"     = opts' { optEntity = Type }
-    | k == "TypeClass"     = opts' { optEntity = TypeClass }
+    | k == "TypeClass"     = opts' { optEntity = Class }
     | otherwise            = opts' { optEntity = Unknown }
    where opts' = opts { optCLS = k }
 

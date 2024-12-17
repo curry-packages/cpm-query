@@ -2,7 +2,7 @@ cpm-query
 =========
 
 This package contains the implementation of a tool to query
-analysis information about entities (e.g., function, types, typeclasses)
+analysis information about entities (e.g., function, types, type classes)
 defined in a module of some Curry package.
 
 The tool is based and, therefore, requires the executable `curry-info`
@@ -22,10 +22,10 @@ or
     > cpm-query --type <module name> <type name>
 
 or
-    > cpm-query --typeclass <module name> <typeclass name>
+    > cpm-query --class <module name> <typeclass name>
 
-Note that `cypm exec` is not necessary to invoke the tool inside
-a package since the load path is automatically computed by this tool.
+Note that it is not necessary to invoke the tool inside a package
+with `cypm exec` since the load path is automatically computed by this tool.
 For instance, try (inside this package)
 
     > cpm-query Data.List split

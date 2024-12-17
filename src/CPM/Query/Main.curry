@@ -28,19 +28,16 @@ import Data.List          ( init, last, split )
 import System.Environment ( getArgs, getEnv, setEnv )
 import System.IO          ( hFlush, stderr, hClose, hGetLine, hPutStrLn )
 
+import FlatCurry.Types    ( QName )
+import Network.Socket     ( connectToSocket, close )
 import System.CurryPath   ( lookupModuleSourceInLoadPath, setCurryPath
                           , sysLibPath )
 import System.Directory   ( doesFileExist, getCurrentDirectory
                           , getModificationTime )
 import System.FilePath    ( (</>), joinPath, splitDirectories )
+import System.IOExts      ( evalCmd, execCmd, readCompleteFile )
 import System.Path        ( fileInPath )
 import System.Process     ( exitWith, system )
-
-import System.IOExts      ( evalCmd, execCmd, readCompleteFile )
-
-import FlatCurry.Types (QName)
-
-import Network.Socket (connectToSocket, close)
 
 import CPM.Query.Options
 
@@ -49,7 +46,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 14/12/24)"
+  bannerText = "CPM Query Tool (Version of 17/12/24)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -75,7 +72,7 @@ main = do
         "Install it by the the following commands:\n\n" ++
         "> git clone https://github.com/curry-language/curry-info-system.git\n" ++
         "> cd curry-info-system\n" ++
-        "> cypm install"
+        "> cypm install\n"
       exitWith 1
 
 -- Start the tool to generate analysis information for a package:
@@ -93,10 +90,10 @@ generateForModule opts pkg vsn mn = do
   genInfo ""
   let cicmd = [ curryInfoVerb opts, "-f2", "-p", pkg, "-x"
               , escapeShellString vsn, "-m", mn]
-  let tcreq = "--alltypeclasses" : defaultRequest (opts {optEntity = TypeClass})
+  let tcreq = "--allclasses" : defaultRequest ( opts {optEntity = Class })
   genInfo (unwords tcreq)
   runCommand opts $ unwords $ cicmd ++ tcreq
-  let treq = "--alltypes": defaultRequest (opts { optEntity = Type })
+  let treq = "--alltypes": defaultRequest ( opts { optEntity = Type } )
   genInfo (unwords treq)
   runCommand opts $ unwords $ cicmd ++ treq
   ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
@@ -205,7 +202,7 @@ startQueryTool opts mname ename = do
   entityParam = case optEntity opts of
                   Operation     -> [ "-o", escapeShellString ename ]
                   Type          -> [ "-t", escapeShellString ename ]
-                  TypeClass     -> [ "-c", escapeShellString ename ]
+                  Class         -> [ "-c", escapeShellString ename ]
                   Unknown       -> []
 
 -- Escape a string to use it in a shell command.
@@ -218,11 +215,11 @@ escapeShellString s = '\'' : concatMap escapeSingleQuote s ++ "'"
 -- The default requests for various kinds entities.
 defaultRequest :: Options -> [String]
 defaultRequest opts = case optEntity opts of
-  Operation     -> [ "cass-deterministic", "cass-total"
-                   , "cass-terminating", "cass-demand", "failfree" ]
-  Type          -> [ "definition" ]
-  TypeClass     -> [ "definition" ]
-  Unknown       -> []
+  Operation  -> [ "cass-deterministic", "cass-total"
+                , "cass-terminating", "cass-demand", "failfree" ]
+  Type       -> [ "definition" ]
+  Class      -> [ "definition" ]
+  Unknown    -> []
 
 --- Checks whether a module name is part of a package and
 --- returns the package name and package version.
@@ -356,9 +353,9 @@ askCurryInfoServer modname entkind req
 
         -- Send requests
         let srvcmd = case entkind of
-                       Type      -> "RequestAllTypesInformation"
-                       TypeClass -> "RequestAllTypeclassesInformation"
-                       _         -> "RequestAllOperationsInformation"
+                       Type   -> "RequestAllTypesInformation"
+                       Class  -> "RequestAllClassesInformation"
+                       _      -> "RequestAllOperationsInformation"
         let msg = srvcmd ++ " curryterm 0 " ++ pkg ++ " " ++ vsn ++ " " ++
                   modname ++ " " ++ req
         hPutStrLn handle msg
@@ -416,9 +413,9 @@ askCurryInfoCmd modname entkind req
       Just (pkg, vsn) -> do
         -- Note: force=0 is important to avoid loops if the analysis tools
         -- also use `curry-info`!
-        let alloption  = case entkind of Type      -> "--alltypes"
-                                         TypeClass -> "--alltypeclasses"
-                                         _         -> "--alloperations"
+        let alloption  = case entkind of Type   -> "--alltypes"
+                                         Class  -> "--allclasses"
+                                         _      -> "--alloperations"
             cmdopts    = [ "--quiet", "-f0", "-p", pkg, "-x", vsn, "-m", modname
                          , alloption, "--format=CurryTerm", req]
         (ec, out, err) <- evalCmd "curry-info" cmdopts ""
