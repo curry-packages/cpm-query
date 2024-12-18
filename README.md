@@ -22,12 +22,14 @@ or
     > cpm-query --type <module name> <type name>
 
 or
-    > cpm-query --class <module name> <typeclass name>
+
+    > cpm-query --class <module name> <class name>
 
 Note that it is not necessary to invoke the tool inside a package
 with `cypm exec` since the load path is automatically computed by this tool.
 For instance, try (inside this package)
 
     > cpm-query Data.List split
+    > cpm-query --class Prelude Ord
     > cpm-query System.Process exitWith
     > cpm-query System.Directory doesFileExist
