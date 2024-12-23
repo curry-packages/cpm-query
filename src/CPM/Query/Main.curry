@@ -104,10 +104,11 @@ generateForModule opts pkg vsn mn = do
     let opreqs = defaultRequest (opts { optEntity = Operation })
     -- other operation analysis requests are only computed for the first
     -- operation since this implicitly set the analysis results for all ops
+    let op1 = snd (fromQName (head ops)) -- strip possible module qualification
     mapM_ (\r -> do genInfo ("alloperations " ++ r)
                     runCommand opts $ unwords $
-                      cicmd ++ ["-o", escapeShellString (head ops), r])
-          (opreqs)
+                      cicmd ++ ["-o", escapeShellString op1, r])
+          opreqs
   where
    genInfo req = printWhenStatus opts $
      "Generating infos for module '" ++ mn ++
@@ -159,6 +160,24 @@ runCommand :: Options -> String -> IO ()
 runCommand opts cmd = do
   when (optVerb opts > 2 || optDryRun opts) $ putStrLn $ "Executing: " ++ cmd
   unless (optDryRun opts) $ system cmd >> return ()
+
+--- Transforms a possible qualified name into a pair of a module name
+--- (which might be empty) and an unqualified name.
+fromQName :: String -> (String,String)
+fromQName = fromQN ""
+ where
+  fromQN mp s =
+    let (m,dotn) = break (=='.') s
+    in if null dotn || not (isModuleID m)
+         then (mp,s)
+         else if null mp then fromQN m (tail dotn)
+                         else fromQN (mp ++ '.':m) (tail dotn)
+
+  -- Is a string a (non-hierarchical) module identifier?
+  isModuleID :: String -> Bool
+  isModuleID []     = False
+  isModuleID (x:xs) = isAlpha x && all (\c -> isAlphaNum c || c `elem` "'_") xs
+
 
 ------------------------------------------------------------------------------
 -- Start the query tool:
