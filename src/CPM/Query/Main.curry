@@ -46,7 +46,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 17/12/24)"
+  bannerText = "CPM Query Tool (Version of 23/12/24)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -97,19 +97,25 @@ generateForModule opts pkg vsn mn = do
   genInfo (unwords treq)
   runCommand opts $ unwords $ cicmd ++ treq
   ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
-  unless (null ops) $ do
-    mapM_ (\r -> do genInfo ("alloperations " ++ r)
-                    runCommand opts $ unwords $ cicmd ++ ["--alloperations", r])
-          ["signature", "definition"]
-    let opreqs = defaultRequest (opts { optEntity = Operation })
-    -- other operation analysis requests are only computed for the first
-    -- operation since this implicitly set the analysis results for all ops
-    let op1 = snd (fromQName (head ops)) -- strip possible module qualification
-    mapM_ (\r -> do genInfo ("alloperations " ++ r)
-                    runCommand opts $ unwords $
-                      cicmd ++ ["-o", escapeShellString op1, r])
-          opreqs
+  case firstLocalOp ops of
+    Nothing -> return ()
+    Just op -> do
+      mapM_ (\r -> do genInfo ("alloperations " ++ r)
+                      runCommand opts $ unwords $
+                        cicmd ++ ["--alloperations", r])
+            ["signature", "definition"]
+      let opreqs = defaultRequest (opts { optEntity = Operation })
+      -- other operation analysis requests are only computed for the first local
+      -- operation since this implicitly set the analysis results for all ops
+      mapM_ (\r -> do genInfo ("alloperations " ++ r)
+                      runCommand opts $ unwords $
+                        cicmd ++ ["-o", escapeShellString op, r])
+            opreqs
   where
+   firstLocalOp ops = case filter (null . fst) (map fromQName ops) of
+                        []  -> Nothing
+                        x:_ -> Just (snd x)
+
    genInfo req = printWhenStatus opts $
      "Generating infos for module '" ++ mn ++
      (if null req then "" else "' and request '" ++ req) ++ "'..."
