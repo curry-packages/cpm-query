@@ -2,7 +2,7 @@
 --- The options of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version November 2024
+--- @version December 2024
 -------------------------------------------------------------------------
 
 module CPM.Query.Options
@@ -20,9 +20,8 @@ import System.Console.GetOpt
 
 import System.Process        ( exitWith )
 
---- The kind of entity of a Curry module to be queried.
-data CurryEntity = Operation | Type | Class | Unknown
-  deriving (Eq, Show)
+import CPM.Query.Configuration
+import CPM.Query.RCFile      ( readRC, rcValue )
 
 -- The options of the query tool.
 data Options = Options
@@ -34,24 +33,50 @@ data Options = Options
   , optDryRun    :: Bool        -- dry run, i.e., do not invoke curry-info?
   , optForce     :: Bool        -- force computation of analysis information?
   , optGenerate  :: Bool        -- generate information for a package version?
+  , optCRequests :: [String]    -- default class requests
+  , optTRequests :: [String]    -- default type requests
+  , optORequests :: [String]    -- default operation requests
   , optRequest   :: [String]    -- specific requests for the entity?
   , optOutFormat :: String      -- output format
+  , optShowAll   :: Bool        -- show all available information
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
-defaultOptions = Options 1 False Operation "" False False False [] "Text"
+defaultOptions =
+  Options 1 False Operation "" False False False [] [] [] [] "Text" False
+
+getDefaultOptions :: IO Options
+getDefaultOptions = do
+  rcprops <- readRC
+  return $
+    defaultOptions
+      { optCRequests = readReqs (rcValue rcprops "classrequests")
+      , optTRequests = readReqs (rcValue rcprops "typerequests")
+      , optORequests = readReqs (rcValue rcprops "operationrequests")
+      , optShowAll = if rcValue rcprops "showall" == "yes" then True else False
+      }
+ where
+  readReqs s = if null s then [] else splitOn "," s
 
 --- Process the actual command line arguments and return the options
 --- and the name of the main program.
 processOptions :: String -> [String] -> IO (Options,[String])
 processOptions banner argv = do
+  dfltoptions <- getDefaultOptions
   let (funopts, args, opterrors) = getOpt Permute options argv
-      opts = foldl (flip id) defaultOptions funopts
+      opts = foldl (flip id) dfltoptions funopts
   unless (null opterrors)
          (putStr (unlines opterrors) >> printUsage >> exitWith 1)
   when (optHelp opts) (printUsage >> exitWith 0)
-  return (opts, args)
+  let opts1 = if any ("--request" `isPrefixOf`) argv
+                then opts
+                else case optEntity opts of
+                       Class     -> opts { optRequest = optCRequests opts }
+                       Type      -> opts { optRequest = optTRequests opts }
+                       Operation -> opts { optRequest = optORequests opts }
+                       Unknown   -> opts
+  return (opts1, args)
  where
   printUsage = putStrLn (banner ++ "\n" ++ usageText)
 
@@ -104,6 +129,9 @@ options =
   , Option "" ["format"]
            (ReqArg checkFormat "<f>")
            "output format: Text (default), JSON, CurryTerm"
+  , Option "" ["showall"]
+           (NoArg (\opts -> opts { optShowAll = True }))
+           "show all available information (no generation)"
   ]
  where
   safeReadNat opttrans s opts = case readNat s of

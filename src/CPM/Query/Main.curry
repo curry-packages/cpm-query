@@ -30,7 +30,9 @@ import System.IO          ( hFlush, stderr, hClose, hGetLine, hPutStrLn )
 
 import FlatCurry.Types    ( QName )
 import Network.Socket     ( connectToSocket, close )
-import System.CurryPath   ( lookupModuleSourceInLoadPath, setCurryPath
+import System.CurryPath   ( lookupModuleSourceInLoadPath
+                          , getPackageVersionOfDirectory
+                          , getPackageVersionOfModule, setCurryPathIfNecessary
                           , sysLibPath )
 import System.Directory   ( doesFileExist, getCurrentDirectory
                           , getModificationTime )
@@ -39,6 +41,7 @@ import System.IOExts      ( evalCmd, execCmd, readCompleteFile )
 import System.Path        ( fileInPath )
 import System.Process     ( exitWith, system )
 
+import CPM.Query.Configuration
 import CPM.Query.Options
 
 ---------------------------------------------------------------------
@@ -90,10 +93,10 @@ generateForModule opts pkg vsn mn = do
   genInfo ""
   let cicmd = [ curryInfoVerb opts, "-f2", "-p", pkg, "-x"
               , escapeShellString vsn, "-m", mn]
-  let tcreq = "--allclasses" : defaultRequest ( opts {optEntity = Class })
+  let tcreq = "--allclasses" : defaultRequests Class
   genInfo (unwords tcreq)
   runCommand opts $ unwords $ cicmd ++ tcreq
-  let treq = "--alltypes": defaultRequest ( opts { optEntity = Type } )
+  let treq = "--alltypes": defaultRequests Type
   genInfo (unwords treq)
   runCommand opts $ unwords $ cicmd ++ treq
   ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
@@ -104,7 +107,7 @@ generateForModule opts pkg vsn mn = do
                       runCommand opts $ unwords $
                         cicmd ++ ["--alloperations", r])
             ["signature", "definition"]
-      let opreqs = defaultRequest (opts { optEntity = Operation })
+      let opreqs = defaultRequests Operation
       -- other operation analysis requests are only computed for the first local
       -- operation since this implicitly set the analysis results for all ops
       mapM_ (\r -> do genInfo ("alloperations " ++ r)
@@ -194,7 +197,7 @@ startQueryTool opts mname ename = do
   case mbsrc of
     Nothing -> error $ "Module '" ++ mname ++ "' not found!"
     Just (dirname,filename) -> do
-      getPackageId dirname >>= maybe
+      getPackageVersionOfDirectory dirname >>= maybe
         (printWhenStatus opts $
            "Module '" ++ mname ++ "' " ++
            (if optVerb opts > 1
@@ -213,14 +216,18 @@ startQueryTool opts mname ename = do
                                mname ++ "." ++ ename ++
                                " (package " ++ pname ++ "-" ++ vers ++ ")"
            putStrLn edescr
-           let request = if null (optRequest opts) then defaultRequest opts
-                                                   else optRequest opts
+           let request = if null (optRequest opts)
+                           then defaultRequests (optEntity opts)
+                           else optRequest opts
                icmd = unwords $
-                         [ curryInfoVerb opts ] ++
-                         [ "--format=" ++ optOutFormat opts ] ++
-                         (if optForce opts then ["-f1"] else ["-f0"]) ++
-                         [ "-p", pname, "-x", escapeShellString vers
-                         , "-m", mname] ++ entityParam ++ request
+                        [ curryInfoVerb opts ] ++
+                        [ "--format=" ++ optOutFormat opts ] ++
+                        (if optForce opts && not (optShowAll opts)
+                           then ["-f1"]
+                           else ["-f0"]) ++
+                        (if optShowAll opts then ["--showall"] else []) ++
+                        [ "-p", pname, "-x", escapeShellString vers
+                        , "-m", mname] ++ entityParam ++ request
            runCommand opts icmd
         )
  where
@@ -237,115 +244,6 @@ escapeShellString s = '\'' : concatMap escapeSingleQuote s ++ "'"
   escapeSingleQuote c | c == '\'' = "'\\\''"
                       | otherwise = [c]
 
--- The default requests for various kinds entities.
-defaultRequest :: Options -> [String]
-defaultRequest opts = case optEntity opts of
-  Operation  -> [ "cass-deterministic", "cass-total"
-                , "cass-terminating", "cass-demand", "failfree" ]
-  Type       -> [ "definition" ]
-  Class      -> [ "definition" ]
-  Unknown    -> []
-
---- Checks whether a module name is part of a package and
---- returns the package name and package version.
---- For instance, in a package containing a dependency to package
---- `process` with version `3.0.0`, the call
----
----     getPackageIdOfModule "System.Process"
----
---- returns
----
----     Just "process" "3.0.0"
----
---- `Nothing` is returned if there is no package to which this module
---- belongs.
----
---- For this purpose, the source file of the module is looked up
---- (and an error is raised if this module cannot be found) and
---- it is checked whether there is a `package.json` file under the
---- directory of the source file and the directory name is a valid package id.
-getPackageIdOfModule :: String -> IO (Maybe (String,String))
-getPackageIdOfModule mname = do
-  mbsrc <- lookupModuleSourceInLoadPath mname
-  case mbsrc of
-    Nothing -> error $ "Module '" ++ mname ++ "' not found in load path!"
-    Just (dirname,_) -> getPackageId dirname
-
---- Checks whether a file path (a list of directory names) is part of a
---- package and returns the package name and package version.
---- For instance,
----
----     getPackageId "/home/joe/mytool/.cpm/packages/process-3.0.0/src"
----
---- returns
----
----     Just "process" "3.0.0"
----
---- For this purpose, it is checked whether there is a `package.json` file
---- under the directory and the directory name is a valid package id.
-getPackageId :: String -> IO (Maybe (String,String))
-getPackageId path =
-  if sysLibPath == [path]
-    then return (Just ("base",baseVersion))
-    else getPackageSpecPath (splitDirectories path) >>=
-         maybe (return Nothing)
-               (\dirnames -> return (splitPkgId "" (last dirnames)))
- where
-  splitPkgId oldpn s =
-    let (pname,hvers) = break (=='-') s
-        newpn = if null oldpn then pname else oldpn ++ "-" ++ pname
-    in if null hvers
-         then Nothing
-         else let vers = tail hvers
-              in if isVersionId vers then Just (newpn,vers)
-                                     else splitPkgId newpn vers
-
-  isVersionId vs = case split (=='.') vs of
-    (maj:min:patch:_) -> all (all isDigit) [maj, min, take 1 patch]
-    _                 -> False
-
---- Returns, for a given directory path, the directory path containing
---- a package specification.
-getPackageSpecPath :: [String] -> IO (Maybe [String])
-getPackageSpecPath []             = return Nothing
-getPackageSpecPath dirnames@(_:_) = do
-  expkg <- doesFileExist (joinPath (dirnames ++ [packageSpecFile]))
-  if expkg
-    then return (Just dirnames)
-    else getPackageSpecPath (init dirnames)
-
---- If the environment variable `CURRYPATH` is not already set
---- (i.e., not null), set it to the value stored in CPM's `CURRYPATH_CACHE`
---- file or set it by `System.CurryPath.setCurryPath`
---- (which uses `cypm deps --path` to compute its value).
-setCurryPathIfNecessary :: IO ()
-setCurryPathIfNecessary = do
-  cp <- getEnv "CURRYPATH"
-  when (null cp) $ do
-    cdir <- getCurrentDirectory
-    getPackageSpecPath (splitDirectories cdir) >>=
-      maybe setCurryPathByCPM (loadCurryPathFromCache . joinPath)
- where
-  loadCurryPathFromCache specdir = do
-    let cachefile = specdir </> ".cpm" </> "CURRYPATH_CACHE"
-    excache <- doesFileExist cachefile
-    if excache
-      then do
-        cftime <- getModificationTime cachefile
-        pftime <- getModificationTime (specdir </> packageSpecFile)
-        if cftime > pftime
-          then do cnt <- readCompleteFile cachefile
-                  let cpath = head (lines cnt)
-                  setEnv "CURRYPATH" cpath
-          else setCurryPathByCPM
-      else setCurryPathByCPM
-
-  setCurryPathByCPM = setCurryPath True ""
-
-  --- The name of the package specification file in JSON format.
-packageSpecFile :: String
-packageSpecFile = "package.json"
-
 ------------------------------------------------------------------------------
 --- This action starts `curry-info` in server mode and returns the result
 --- of the given request (third argument) for all operations in the module
@@ -361,7 +259,7 @@ askCurryInfoServer :: String -> CurryEntity -> String
 askCurryInfoServer modname entkind req
   | entkind == Unknown = return Nothing
   | otherwise = do
-    mres <- getPackageIdOfModule modname
+    mres <- getPackageVersionOfModule modname
     case mres of
       Nothing -> return Nothing
       Just (pkg, vsn) -> do
@@ -432,7 +330,7 @@ askCurryInfoCmd :: String -> CurryEntity -> String
 askCurryInfoCmd modname entkind req
   | entkind == Unknown = return Nothing
   | otherwise = do
-    mres <- getPackageIdOfModule modname
+    mres <- getPackageVersionOfModule modname
     case mres of
       Nothing -> return Nothing
       Just (pkg, vsn) -> do
