@@ -260,7 +260,7 @@ callCurryInfo :: Options -> [String] -> IO ()
 callCurryInfo opts ciopts = do
   let cmd = if optCGI opts
               then "curl --max-time 3600 --silent --show-error '" ++
-                   curryInfoCGI ++ "?" ++ intercalate "&" ciopts ++ "'"
+                   optCGIURL opts ++ "?" ++ intercalate "&" ciopts ++ "'"
               else unwords (curryInfoVerb opts : ciopts)
   runCommand opts cmd
 

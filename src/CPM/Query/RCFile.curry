@@ -3,7 +3,7 @@
 --- that is stored in `$HOME/.cpmqueryrc`
 ---
 --- @author  Michael Hanus
---- @version December 2024
+--- @version January 2025
 ------------------------------------------------------------------------------
 
 module CPM.Query.RCFile
@@ -14,6 +14,7 @@ import Control.Monad     ( unless )
 import Data.Char         ( toLower )
 import Data.Either       ( rights )
 import Data.List         ( intercalate, sort )
+import System.IO         ( hPutStrLn, stderr )
 
 import Data.PropertyFile ( readPropertyFile, updatePropertyFile )
 import System.FilePath   ( FilePath, (</>), (<.>) )
@@ -38,6 +39,10 @@ defaultRCProps =
   , Left ""
   , Left "# Show all available information (no|yes):"
   , Right ("showall", "no")
+  , Left ""
+  , Left "# URL of the web installation of curry-info (used with option --cgi)"
+  , Left "# (if empty: use default URL)"
+  , Right ("curryinfocgi", "")
   ]
 
 --- The contents of the default RC template file.
@@ -57,7 +62,7 @@ readRC = do
   rcexists  <- doesFileExist rcname
   catch (if rcexists
            then updateRC
-           else do putStrLn $ "Installing '" ++ rcname ++ "'..."
+           else do hPutStrLn stderr $ "Installing '" ++ rcname ++ "'..."
                    writeFile rcname defaultRC)
         (const $ return ())
   readPropertyFile rcname
@@ -71,7 +76,7 @@ updateRC = do
   userprops <- readPropertyFile rcname
   let dfltprops = rights defaultRCProps
   unless (rcKeys userprops == rcKeys dfltprops) $ do
-    putStrLn $ "Updating '" ++ rcname ++ "'..."
+    hPutStrLn stderr $ "Updating '" ++ rcname ++ "'..."
     renameFile rcname $ rcname <.> "bak"
     writeFile rcname defaultRC
     mapM_ (\ (n, v) ->

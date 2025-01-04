@@ -40,12 +40,14 @@ data Options = Options
   , optOutFormat :: String      -- output format
   , optShowAll   :: Bool        -- show all available information
   , optCGI       :: Bool        -- use curry-info CGI to request information?
+  , optCGIURL    :: String      -- URL of the curry-info CGI script
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False Operation "" False False False [] [] [] [] "Text" False False
+  Options 1 False Operation "" False False False [] [] [] [] "Text"
+          False False ""
 
 getDefaultOptions :: IO Options
 getDefaultOptions = do
@@ -56,6 +58,8 @@ getDefaultOptions = do
       , optTRequests = readReqs (rcValue rcprops "typerequests")
       , optORequests = readReqs (rcValue rcprops "operationrequests")
       , optShowAll = if rcValue rcprops "showall" == "yes" then True else False
+      , optCGIURL  = let rcurl = rcValue rcprops "curryinfocgi"
+                     in if null rcurl then curryInfoCGI else rcurl
       }
  where
   readReqs s = if null s then [] else splitOn "," s
