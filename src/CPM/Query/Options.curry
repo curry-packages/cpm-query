@@ -2,7 +2,7 @@
 --- The options of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version December 2024
+--- @version January 2025
 -------------------------------------------------------------------------
 
 module CPM.Query.Options
@@ -39,12 +39,13 @@ data Options = Options
   , optRequest   :: [String]    -- specific requests for the entity?
   , optOutFormat :: String      -- output format
   , optShowAll   :: Bool        -- show all available information
+  , optCGI       :: Bool        -- use curry-info CGI to request information?
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False Operation "" False False False [] [] [] [] "Text" False
+  Options 1 False Operation "" False False False [] [] [] [] "Text" False False
 
 getDefaultOptions :: IO Options
 getDefaultOptions = do
@@ -132,6 +133,9 @@ options =
   , Option "" ["showall"]
            (NoArg (\opts -> opts { optShowAll = True }))
            "show all available information (no generation)"
+  , Option "" ["cgi"]
+           (NoArg (\opts -> opts { optCGI = True }))
+           "use 'curry-info' CGI server to fetch information"
   ]
  where
   safeReadNat opttrans s opts = case readNat s of

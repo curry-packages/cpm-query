@@ -2,11 +2,11 @@
 --- Configuration parameters of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version December 2024
+--- @version January 2025
 -------------------------------------------------------------------------
 
 module CPM.Query.Configuration
-  ( CurryEntity(..), defaultRequests
+  ( CurryEntity(..), defaultRequests, curryInfoCGI
   )
  where
 
@@ -14,7 +14,7 @@ module CPM.Query.Configuration
 data CurryEntity = Operation | Type | Class | Unknown
   deriving (Eq, Show)
 
--- The default requests for various kinds entities.
+--- The default requests for various kinds entities.
 defaultRequests :: CurryEntity -> [String]
 defaultRequests cent = case cent of
   Operation  -> [ "cass-deterministic", "cass-total"
@@ -23,3 +23,6 @@ defaultRequests cent = case cent of
   Class      -> [ "definition" ]
   Unknown    -> []
 
+--- The URL of the `curry-info` CGI script.
+curryInfoCGI :: String
+curryInfoCGI = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"

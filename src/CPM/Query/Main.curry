@@ -14,7 +14,7 @@
 ---     > cpm-query System.Process exitWith
 ---     > cpm-query System.Directory doesFileExist
 ---
---- @version December 2024
+--- @version January 2025
 ------------------------------------------------------------------------
 
 module CPM.Query.Main
@@ -24,7 +24,7 @@ module CPM.Query.Main
 import Control.Monad      ( unless, when, replicateM, replicateM_ )
 import Curry.Compiler.Distribution ( baseVersion )
 import Data.Char          ( isDigit )
-import Data.List          ( init, last, split )
+import Data.List          ( init, intercalate, last, split )
 import System.Environment ( getArgs, getEnv, setEnv )
 import System.IO          ( hFlush, stderr, hClose, hGetLine, hPutStrLn )
 
@@ -49,7 +49,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 23/12/24)"
+  bannerText = "CPM Query Tool (Version of 04/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -78,6 +78,7 @@ main = do
         "> cypm install\n"
       exitWith 1
 
+------------------------------------------------------------------------------
 -- Start the tool to generate analysis information for a package:
 generateForPackage:: Options -> String -> String -> IO ()
 generateForPackage opts pkg vsn = do
@@ -85,56 +86,64 @@ generateForPackage opts pkg vsn = do
     "Generating infos for package '" ++ pkg ++ "-" ++ vsn ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
-  mods <- getPackageInfos opts pkg vsn ["modules"]
+  printWhenStatus opts "Cleaning old information..."
+  let cleanopts = [ "--package=" ++ escapeString opts pkg
+                  , "--version=" ++ escapeString opts vsn
+                  , "--clean" ]
+  callCurryInfo opts cleanopts
+  when (optCGI opts) $ do  -- update repo index in CGI mode:
+    printWhenStatus opts "Update package repository index..."
+    callCurryInfo opts [ "--update" ]
+  mods <- getPackageInfos opts pkg vsn Nothing
   mapM_ (generateForModule opts pkg vsn) mods
 
 generateForModule :: Options -> String -> String -> String -> IO ()
 generateForModule opts pkg vsn mn = do
-  genInfo ""
-  let cicmd = [ curryInfoVerb opts, "-f2", "-p", pkg, "-x"
-              , escapeShellString vsn, "-m", mn]
-  let tcreq = "--allclasses" : defaultRequests Class
-  genInfo (unwords tcreq)
-  runCommand opts $ unwords $ cicmd ++ tcreq
-  let treq = "--alltypes": defaultRequests Type
-  genInfo (unwords treq)
-  runCommand opts $ unwords $ cicmd ++ treq
-  ops <- getPackageInfos opts pkg vsn ["-m", mn, "operations"]
+  genInfo []
+  let ciopts = [ "--force=2"
+               , "--package=" ++ escapeString opts pkg
+               , "--version=" ++ escapeString opts vsn
+               , "--module="  ++ escapeString opts mn ]
+  infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
+  infoAndCallCurry ciopts ("--alltypes" : defaultRequests Type)
+  ops <- getPackageInfos opts pkg vsn (Just mn)
   case firstLocalOp ops of
     Nothing -> return ()
     Just op -> do
-      mapM_ (\r -> do genInfo ("alloperations " ++ r)
-                      runCommand opts $ unwords $
-                        cicmd ++ ["--alloperations", r])
+      mapM_ (\r -> infoAndCallCurry ciopts ["--alloperations", r])
             ["signature", "definition"]
       let opreqs = defaultRequests Operation
       -- other operation analysis requests are only computed for the first local
       -- operation since this implicitly set the analysis results for all ops
-      mapM_ (\r -> do genInfo ("alloperations " ++ r)
-                      runCommand opts $ unwords $
-                        cicmd ++ ["-o", escapeShellString op, r])
+      mapM_ (\r -> infoAndCallCurry ciopts
+                     ["--operation=" ++ escapeString opts op, r])
             opreqs
   where
+   infoAndCallCurry ciopts reqs = do
+     genInfo reqs
+     callCurryInfo opts $ ciopts ++ reqs
+
    firstLocalOp ops = case filter (null . fst) (map fromQName ops) of
                         []  -> Nothing
                         x:_ -> Just (snd x)
 
    genInfo req = printWhenStatus opts $
-     "Generating infos for module '" ++ mn ++
-     (if null req then "" else "' and request '" ++ req) ++ "'..."
+     "Generating infos for '" ++ mn ++
+     (if null req then "" else "' and '" ++ unwords req) ++ "'..."
 
 --- Computes some information of a package version by `curry-info`.
 --- In case of a parse error, the program is terminated with an error state.
---- The final parameter is the list of paramters passed to `curry-info` after
---- the package and version options to specify a _single_ request.
---- For instance, these can be:
---- * To get all modules: `["modules"]`
---- * To get all operations in module `mn`: `["-m", mn, "operations"]`
-getPackageInfos :: Read a => Options -> String -> String -> [String] -> IO a
-getPackageInfos opts pkg vsn requests = do
-  printWhenStatus opts $ "Generating infos for package '" ++ pkg ++ "-" ++ vsn
-                         ++ "' for requests: " ++ unwords requests
-  let cmdopts = ["-v0", "--format=CurryTerm", "-p", pkg, "-x", vsn] ++ requests
+--- The final parameter is kind of request, which is `Nothing` to return
+--- all modules or `Just m` to return all operations of module `m`.
+getPackageInfos :: Read a => Options -> String -> String -> Maybe String -> IO a
+getPackageInfos opts pkg vsn mbmod = do
+  let requests = maybe ["modules"]
+                       (\m -> ["--module=" ++ m, "operations"])
+                       mbmod
+  printWhenStatus opts $ "Generating infos for '" ++ pkg ++ "-" ++ vsn
+                         ++ "' and '" ++ unwords requests ++ "'..."
+  let cmdopts = [ "-v0", "--format=CurryTerm", "--package=" ++ pkg
+                , "--version=" ++ vsn] ++ requests
   printWhenAll opts $ unwords $ ["Executing:", curryInfoBin] ++ cmdopts
   (ec,sout,serr) <- evalCmd curryInfoBin cmdopts ""
   printWhenAll opts $ "Exit code: " ++ show ec ++ "\nSTDOUT:\n" ++ sout ++
@@ -146,15 +155,17 @@ getPackageInfos opts pkg vsn requests = do
                [(ms,_)] -> return (ms :: [(String,String)])
                _ -> putStrLn ("Parse error for: " ++ sout) >> exitWith 1
   -- the info string is a pair of requests and results as strings:
-  let infos = snd (head resterm)
-  infolist <- case reads infos of
-                [(ms,_)] -> return (ms :: [(String,String)])
-                _ -> putStrLn ("Parse error for: " ++ infos) >> exitWith 1
-  -- finally, the (first) result string is a list of module names:
-  let infostring = snd (head infolist)
-  case reads infostring of
-    [(ms,_)] -> return ms
-    _        -> putStrLn ("Parse error for: " ++ infostring) >> exitWith 1
+  case resterm of
+    [] -> putStrLn "NO INFORMATION FOUND!" >> exitWith 1
+    ((_,infos):_) -> do
+      infolist <- case reads infos of
+                    [(ms,_)] -> return (ms :: [(String,String)])
+                    _ -> putStrLn ("Parse error for: " ++ infos) >> exitWith 1
+      -- finally, the (first) result string is a list of module names:
+      let infostring = snd (head infolist)
+      case reads infostring of
+        [(ms,_)] -> return ms
+        _        -> putStrLn ("Parse error for: " ++ infostring) >> exitWith 1
 
 --- The binary name of the curry-info tool.
 curryInfoBin :: String
@@ -162,7 +173,8 @@ curryInfoBin = "curry-info"
 
 -- The binary name of the curry-info tool together with verbosity option.
 curryInfoVerb :: Options -> String
-curryInfoVerb opts = unwords [curryInfoBin, "-v" ++ show (optVerb opts)]
+curryInfoVerb opts =
+  unwords [curryInfoBin, "--verbosity=" ++ show (optVerb opts)]
 
 -- Show and run a command (if not in dry-run mode).
 runCommand :: Options -> String -> IO ()
@@ -219,27 +231,58 @@ startQueryTool opts mname ename = do
            let request = if null (optRequest opts)
                            then defaultRequests (optEntity opts)
                            else optRequest opts
-               icmd = unwords $
-                        [ curryInfoVerb opts ] ++
-                        [ "--format=" ++ optOutFormat opts ] ++
+               ciopts = [ "--format=" ++ optOutFormat opts ] ++
                         (if optForce opts && not (optShowAll opts)
                            then ["-f1"]
                            else ["-f0"]) ++
                         (if optShowAll opts then ["--showall"] else []) ++
-                        [ "-p", pname, "-x", escapeShellString vers
-                        , "-m", mname] ++ entityParam ++ request
-           runCommand opts icmd
+                        [ "--package=" ++ escapeString opts pname
+                        , "--version=" ++ escapeString opts vers
+                        , "--module="  ++ escapeString opts mname] ++
+                        entityParam ++ request
+           callCurryInfo opts ciopts
         )
  where
+  escename = escapeString opts ename
+
   entityParam = case optEntity opts of
-                  Operation     -> [ "-o", escapeShellString ename ]
-                  Type          -> [ "-t", escapeShellString ename ]
-                  Class         -> [ "-c", escapeShellString ename ]
+                  Operation     -> [ "--operation=" ++ escename ]
+                  Type          -> [ "--type="      ++ escename ]
+                  Class         -> [ "--class="     ++ escename ]
                   Unknown       -> []
+
+-- Escape a string for shell comand or for CGI URL.
+escapeString :: Options -> String -> String
+escapeString opts s = if optCGI opts then string2urlencoded s
+                                     else escapeShellString s
+
+callCurryInfo :: Options -> [String] -> IO ()
+callCurryInfo opts ciopts = do
+  let cmd = if optCGI opts
+              then "curl --max-time 3600 --silent --show-error '" ++
+                   curryInfoCGI ++ "?" ++ intercalate "&" ciopts ++ "'"
+              else unwords (curryInfoVerb opts : ciopts)
+  runCommand opts cmd
+
+-- From HTML.Base:
+-- Translates arbitrary strings into equivalent URL encoded strings.
+string2urlencoded :: String -> String
+string2urlencoded [] = []
+string2urlencoded (c:cs)
+  | isAlphaNum c = c : string2urlencoded cs
+  | c == ' '     = '+' : string2urlencoded cs
+  | otherwise
+  = let oc = ord c
+    in '%' : int2hex(oc `div` 16) : int2hex(oc `mod` 16) : string2urlencoded cs
+ where
+  int2hex i = if i<10 then chr (ord '0' + i)
+                      else chr (ord 'A' + i - 10)
 
 -- Escape a string to use it in a shell command.
 escapeShellString :: String -> String
-escapeShellString s = '\'' : concatMap escapeSingleQuote s ++ "'"
+escapeShellString s
+  | all isAlphaNum s = s
+  | otherwise        = '\'' : concatMap escapeSingleQuote s ++ "'"
  where
   escapeSingleQuote c | c == '\'' = "'\\\''"
                       | otherwise = [c]
@@ -317,7 +360,7 @@ askCurryInfoServer modname entkind req
 
 ------------------------------------------------------------------------------
 --- This action uses the `curry-info` command to return the result
---- of the given request (third argument) for all operations in the module
+--- of the given request (third argument) for all entities in the module
 --- provided as the first argument. The requested result is returned in its
 --- string representation for each entity in the module.
 --- The second argument is the kind of entity to be queried.
