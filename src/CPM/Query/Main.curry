@@ -26,7 +26,8 @@ import Curry.Compiler.Distribution ( baseVersion )
 import Data.Char          ( isDigit )
 import Data.List          ( init, intercalate, isPrefixOf, last, split )
 import System.Environment ( getArgs, getEnv, setEnv )
-import System.IO          ( hFlush, stderr, hClose, hGetLine, hPutStrLn )
+import System.IO          ( getContents, hFlush, stderr, hClose, hGetLine
+                          , hPutStrLn )
 
 import FlatCurry.Types    ( QName )
 import Network.Socket     ( connectToSocket, close )
@@ -60,14 +61,24 @@ main = do
     printWhenStatus opts $
       "No information for entity of kind '" ++ optCLS opts ++ "'"
     exitWith 0
+  let genfile = optGenFrom opts
   case args of
     [pkg,vsn,mn] | optGenerate opts -> generateForModule opts pkg vsn mn
     [mn,fn] -> if optGenerate opts then generateForPackage opts mn fn 
                                    else queryModuleEntity opts mn fn
-    _       -> do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
+    _       ->
+      if null args && optGenerate opts && not (null genfile)
+        then do ls <- if genfile == "-" then getContents else readFile genfile
+                mapM_ (genFromLine opts) (lines ls)
+        else do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
                              usageText
-                  exitWith 1
+                exitWith 1
  where
+  genFromLine opts l = case words l of
+    [p,v]   -> generateForPackage opts p v
+    [p,v,m] -> generateForModule opts p v m
+    _       -> error $ "Illegal line in generate file: " ++ l
+
   checkExecutable = do
     hascurryinfo <- fileInPath "curry-info"
     unless hascurryinfo $ do

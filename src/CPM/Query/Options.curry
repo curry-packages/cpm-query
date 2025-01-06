@@ -33,6 +33,7 @@ data Options = Options
   , optDryRun    :: Bool        -- dry run, i.e., do not invoke curry-info?
   , optForce     :: Bool        -- force computation of analysis information?
   , optGenerate  :: Bool        -- generate information for a package version?
+  , optGenFrom   :: String      -- file containing package/versions to generate
   , optCRequests :: [String]    -- default class requests
   , optTRequests :: [String]    -- default type requests
   , optORequests :: [String]    -- default operation requests
@@ -46,7 +47,7 @@ data Options = Options
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False Operation "" False False False [] [] [] [] "Text"
+  Options 1 False Operation "" False False False "" [] [] [] [] "Text"
           False False ""
 
 getDefaultOptions :: IO Options
@@ -74,7 +75,9 @@ processOptions banner argv = do
   unless (null opterrors)
          (putStr (unlines opterrors) >> printUsage >> exitWith 1)
   when (optHelp opts) (printUsage >> exitWith 0)
-  let opts1 = if any ("--request" `isPrefixOf`) argv
+  when (not (null (optGenFrom opts)) && not (optGenerate opts))
+       (putStrLn "Superfluous file with generate data!" >> exitWith 1)
+  let opts1 = if any ("--request" `isPrefixOf`) argv || not (optGenerate opts)
                 then opts
                 else case optEntity opts of
                        Class     -> opts { optRequest = optCRequests opts }
@@ -126,6 +129,9 @@ options =
   , Option "" ["generate"]
            (NoArg (\opts -> opts { optGenerate = True }))
            "generate analysis infos for a package version"
+  , Option "" ["from"]
+           (ReqArg (\f opts -> opts { optGenFrom = f }) "<f>")
+           "file with generate data"
   , Option "" ["request"]
            (ReqArg (\r opts -> opts { optRequest = optRequest opts ++
                                                    splitOn "," r })
