@@ -43,6 +43,7 @@ defaultRCProps =
   , Left "# URL of the web installation of curry-info (used with option --cgi)"
   , Left "# (if empty: use default URL)"
   , Right ("curryinfocgi", "")
+  , Left ""
   ]
 
 --- The contents of the default RC template file.

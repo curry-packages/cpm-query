@@ -105,21 +105,21 @@ options =
   , Option "v" ["verbosity"]
            (OptArg (maybe (checkVerb 2) (safeReadNat checkVerb)) "<n>")
            "verbosity level:\n0: quiet (same as `-q')\n1: show status messages (default)\n2: show more details (same as `-v')\n3: show all details"
-  , Option "f" ["function"]
-           (NoArg (\opts -> opts { optEntity = Operation }))
-          "show information about an operation (default)"
   , Option "t" ["type"]
            (NoArg (\opts -> opts { optEntity = Type }))
           "show information about a type"
   , Option "c" ["class"]
            (NoArg (\opts -> opts { optEntity = Class }))
            "show information about a type class"
+  , Option "o" ["operation"]
+           (NoArg (\opts -> opts { optEntity = Operation }))
+          "show information about an operation (default)"
   , Option "" ["clskind"]
            (ReqArg checkKind "<k>")
            "entity kind provided by the Curry language server\n(ValueFunction|TypeData|Class|...)"
   , Option "" ["force"]
            (NoArg (\opts -> opts { optForce = True }))
-           "force computation of properties"
+           "force generation of properties"
   , Option "d" ["dry"]
            (NoArg (\opts -> opts { optDryRun = True }))
            "dry run, i.e., do not run `curry-info` analyses"
