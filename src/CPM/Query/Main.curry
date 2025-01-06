@@ -24,7 +24,7 @@ module CPM.Query.Main
 import Control.Monad      ( unless, when, replicateM, replicateM_ )
 import Curry.Compiler.Distribution ( baseVersion )
 import Data.Char          ( isDigit )
-import Data.List          ( init, intercalate, last, split )
+import Data.List          ( init, intercalate, isPrefixOf, last, split )
 import System.Environment ( getArgs, getEnv, setEnv )
 import System.IO          ( hFlush, stderr, hClose, hGetLine, hPutStrLn )
 
@@ -49,7 +49,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 04/01/25)"
+  bannerText = "CPM Query Tool (Version of 06/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -63,7 +63,7 @@ main = do
   case args of
     [pkg,vsn,mn] | optGenerate opts -> generateForModule opts pkg vsn mn
     [mn,fn] -> if optGenerate opts then generateForPackage opts mn fn 
-                                   else startQueryTool opts mn fn
+                                   else queryModuleEntity opts mn fn
     _       -> do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
                              usageText
                   exitWith 1
@@ -79,57 +79,69 @@ main = do
       exitWith 1
 
 ------------------------------------------------------------------------------
--- Start the tool to generate analysis information for a package:
+-- Generate analysis information for a given package and version.
+-- In CGI mode, the package repository index is also updated.
 generateForPackage:: Options -> String -> String -> IO ()
 generateForPackage opts pkg vsn = do
   printWhenStatus opts $
     "Generating infos for package '" ++ pkg ++ "-" ++ vsn ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
-  printWhenStatus opts "Cleaning old information..."
-  let cleanopts = [ "--package=" ++ escapeString opts pkg
-                  , "--version=" ++ escapeString opts vsn
-                  , "--clean" ]
-  callCurryInfo opts cleanopts
   when (optCGI opts) $ do  -- update repo index in CGI mode:
     printWhenStatus opts "Update package repository index..."
     callCurryInfo opts [ "--update" ]
   mods <- getPackageInfos opts pkg vsn Nothing
   mapM_ (generateForModule opts pkg vsn) mods
 
+-- Generate analysis information for a given package, version, and module.
 generateForModule :: Options -> String -> String -> String -> IO ()
 generateForModule opts pkg vsn mn = do
   genInfo []
-  let ciopts = [ "--force=2"
-               , "--package=" ++ escapeString opts pkg
-               , "--version=" ++ escapeString opts vsn
-               , "--module="  ++ escapeString opts mn ]
-  infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
-  infoAndCallCurry ciopts ("--alltypes" : defaultRequests Type)
-  ops <- getPackageInfos opts pkg vsn (Just mn)
-  case firstLocalOp ops of
-    Nothing -> return ()
-    Just op -> do
-      mapM_ (\r -> infoAndCallCurry ciopts ["--alloperations", r])
-            ["signature", "definition"]
-      let opreqs = defaultRequests Operation
-      -- other operation analysis requests are only computed for the first local
-      -- operation since this implicitly set the analysis results for all ops
-      mapM_ (\r -> infoAndCallCurry ciopts
-                     ["--operation=" ++ escapeString opts op, r])
-            opreqs
-  where
-   infoAndCallCurry ciopts reqs = do
-     genInfo reqs
-     callCurryInfo opts $ ciopts ++ reqs
+  let modopts = [ "--package=" ++ escapeString opts pkg
+                , "--version=" ++ escapeString opts vsn
+                , "--module="  ++ escapeString opts mn ]
+  when (null (optRequest opts)) $ do
+    printWhenStatus opts $ "Cleaning information of module '" ++ mn ++ "'..."
+    callCurryInfo opts (modopts ++ ["--clean"])
+  let ciopts  = "--force=2" : modopts
+      optreqs = optRequest opts
+  if null optreqs
+    then do
+      infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
+      infoAndCallCurry ciopts ("--alltypes" : defaultRequests Type)
+      mapM_ (genOpRequest ciopts)
+            (["signature", "definition"] ++ defaultRequests Operation)
+    else case optEntity opts of
+      Class     -> infoAndCallCurry ciopts ("--allclasses"    : optreqs)
+      Type      -> infoAndCallCurry ciopts ("--alltypes"      : optreqs)
+      Operation -> mapM_ (genOpRequest ciopts) optreqs
+      Unknown   -> return ()
+ where
+  -- is the request one which generates infos for all operations at once?
+  singleOpRequest req = "cass-" `isPrefixOf` req || req == "failfree"
 
-   firstLocalOp ops = case filter (null . fst) (map fromQName ops) of
-                        []  -> Nothing
-                        x:_ -> Just (snd x)
+  genOpRequest ciopts req
+    | singleOpRequest req
+    = fmap firstLocalOp (getPackageInfos opts pkg vsn (Just mn)) >>=
+      maybe (return ())
+        (\op ->
+          -- compute request only for the first local operation since
+          -- this implicitly sets the analysis results for all operations:
+          infoAndCallCurry ciopts ["--operation=" ++ escapeString opts op, req])
+    | otherwise
+    = infoAndCallCurry ciopts ["--alloperations", req]
+    
+  infoAndCallCurry ciopts reqs = do
+    genInfo reqs
+    callCurryInfo opts $ ciopts ++ reqs
 
-   genInfo req = printWhenStatus opts $
-     "Generating infos for '" ++ mn ++
-     (if null req then "" else "' and '" ++ unwords req) ++ "'..."
+  firstLocalOp ops = case filter (null . fst) (map fromQName ops) of
+                       []  -> Nothing
+                       x:_ -> Just (snd x)
+
+  genInfo req = printWhenStatus opts $
+    "Generating infos for '" ++ mn ++
+    (if null req then "" else "' and '" ++ unwords req) ++ "'..."
 
 --- Computes some information of a package version by `curry-info`.
 --- In case of a parse error, the program is terminated with an error state.
@@ -201,9 +213,10 @@ fromQName = fromQN ""
 
 
 ------------------------------------------------------------------------------
--- Start the query tool:
-startQueryTool :: Options -> String -> String -> IO ()
-startQueryTool opts mname ename = do
+-- Query an entity of a given module. The module is looked up in the
+-- current load path of Curry.
+queryModuleEntity :: Options -> String -> String -> IO ()
+queryModuleEntity opts mname ename = do
   setCurryPathIfNecessary
   mbsrc <- lookupModuleSourceInLoadPath mname
   case mbsrc of
@@ -369,7 +382,7 @@ askCurryInfoServer modname entkind req
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
 askCurryInfoCmd :: String -> CurryEntity -> String
-               -> IO (Maybe [(QName, String)])
+                -> IO (Maybe [(QName, String)])
 askCurryInfoCmd modname entkind req
   | entkind == Unknown = return Nothing
   | otherwise = do
