@@ -17,9 +17,9 @@ data CurryEntity = Operation | Type | Class | Unknown
 --- The default requests for various kinds entities.
 defaultRequests :: CurryEntity -> [String]
 defaultRequests cent = case cent of
-  Operation  -> [ "cass-deterministic", "cass-total"
+  Operation  -> [ "documentation", "cass-deterministic", "cass-total"
                 , "cass-terminating", "cass-demand", "failfree" ]
-  Type       -> [ "definition" ]
+  Type       -> [ "documentation", "definition" ]
   Class      -> [ "definition" ]
   Unknown    -> []
 

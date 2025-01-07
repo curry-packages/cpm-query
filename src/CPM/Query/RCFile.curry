@@ -25,7 +25,9 @@ import CPM.Query.Configuration
 --- Initial properties of the default RC template file.
 defaultRCProps :: [Either String (String,String)]
 defaultRCProps =
-  [ Left "# Requests for classes, separated by comma:"
+  [ Left "# Configuration file for command 'cpm-query'"
+  , Left ""
+  , Left "# Requests for classes, separated by comma:"
   , Left $ "# default: " ++ intercalate "," (defaultRequests Class)
   , Right ("classrequests", "")
   , Left ""

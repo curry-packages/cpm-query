@@ -30,6 +30,7 @@ data Options = Options
   , optHelp      :: Bool        -- if help info should be printed
   , optEntity    :: CurryEntity -- show the result for this kind of entity
   , optCLS       :: String      -- entity kind passed by Curry language server
+  , optColor     :: Bool        -- use colors in text output?
   , optDryRun    :: Bool        -- dry run, i.e., do not invoke curry-info?
   , optForce     :: Bool        -- force computation of analysis information?
   , optGenerate  :: Bool        -- generate information for a package version?
@@ -47,7 +48,7 @@ data Options = Options
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False Operation "" False False False "" [] [] [] [] "Text"
+  Options 1 False Operation "" False False False False "" [] [] [] [] "Text"
           False False ""
 
 getDefaultOptions :: IO Options
@@ -120,12 +121,15 @@ options =
   , Option "" ["clskind"]
            (ReqArg checkKind "<k>")
            "entity kind provided by the Curry language server\n(ValueFunction|TypeData|Class|...)"
-  , Option "" ["force"]
-           (NoArg (\opts -> opts { optForce = True }))
-           "force generation of properties"
+  , Option "" ["color"]
+           (NoArg (\opts -> opts { optColor = True }))
+           "use colors in text output"
   , Option "d" ["dry"]
            (NoArg (\opts -> opts { optDryRun = True }))
            "dry run, i.e., do not run `curry-info` analyses"
+  , Option "" ["force"]
+           (NoArg (\opts -> opts { optForce = True }))
+           "force generation of properties"
   , Option "" ["generate"]
            (NoArg (\opts -> opts { optGenerate = True }))
            "generate analysis infos for a package version"

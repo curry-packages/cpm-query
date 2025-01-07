@@ -24,7 +24,7 @@ module CPM.Query.Main
 import Control.Monad      ( unless, when, replicateM, replicateM_ )
 import Curry.Compiler.Distribution ( baseVersion )
 import Data.Char          ( isDigit )
-import Data.List          ( init, intercalate, isPrefixOf, last, split )
+import Data.List          ( init, intercalate, isPrefixOf, last, split, union )
 import System.Environment ( getArgs, getEnv, setEnv )
 import System.IO          ( getContents, hFlush, stderr, hClose, hGetLine
                           , hPutStrLn )
@@ -77,7 +77,10 @@ main = do
   genFromLine opts l = case words l of
     [p,v] -> generateForPackage opts p v
     []    -> return () -- skip empty lines 
-    _     -> hPutStrLn stderr $ "Ignore illegal line in generate file: " ++ l
+    _     -> if take 1 l == "#"
+               then return () -- ignore comments
+               else hPutStrLn stderr $
+                      "Ignore illegal line in generate file: " ++ l
 
   checkExecutable = do
     hascurryinfo <- fileInPath "curry-info"
@@ -125,7 +128,8 @@ generateForModule opts pkg vsn mn = do
       infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
       infoAndCallCurry ciopts ("--alltypes" : defaultRequests Type)
       mapM_ (genOpRequest ciopts)
-            (["signature", "definition"] ++ defaultRequests Operation)
+            (union ["signature", "definition", "documentation"]
+                   (defaultRequests Operation))
     else case optEntity opts of
       Class     -> infoAndCallCurry ciopts ("--allclasses"    : optreqs)
       Type      -> infoAndCallCurry ciopts ("--alltypes"      : optreqs)
@@ -200,8 +204,13 @@ curryInfoBin = "curry-info"
 
 -- The binary name of the curry-info tool together with verbosity option.
 curryInfoVerb :: Options -> String
-curryInfoVerb opts =
-  unwords [curryInfoBin, "--verbosity=" ++ show (optVerb opts)]
+curryInfoVerb opts = unwords $
+  curryInfoBin : addColorCIOption opts ["--verbosity=" ++ show (optVerb opts)]
+
+--- Add the option `--color` to a list of `curry-info` options, if demanded.
+addColorCIOption :: Options -> [String] -> [String]
+addColorCIOption opts ciopts =
+  if optColor opts then "--color" : ciopts else ciopts
 
 -- Show and run a command (if not in dry-run mode).
 runCommand :: Options -> String -> IO ()
@@ -288,7 +297,8 @@ callCurryInfo :: Options -> [String] -> IO ()
 callCurryInfo opts ciopts = do
   let cmd = if optCGI opts
               then "curl --max-time 3600 --silent --show-error '" ++
-                   optCGIURL opts ++ "?" ++ intercalate "&" ciopts ++ "'"
+                   optCGIURL opts ++ "?" ++
+                   intercalate "&" (addColorCIOption opts ciopts) ++ "'"
               else unwords (curryInfoVerb opts : ciopts)
   runCommand opts cmd
 
