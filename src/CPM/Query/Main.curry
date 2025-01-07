@@ -50,7 +50,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 06/01/25)"
+  bannerText = "CPM Query Tool (Version of 07/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -75,9 +75,9 @@ main = do
                 exitWith 1
  where
   genFromLine opts l = case words l of
-    [p,v]   -> generateForPackage opts p v
-    [p,v,m] -> generateForModule opts p v m
-    _       -> error $ "Illegal line in generate file: " ++ l
+    [p,v] -> generateForPackage opts p v
+    []    -> return () -- skip empty lines 
+    _     -> hPutStrLn stderr $ "Ignore illegal line in generate file: " ++ l
 
   checkExecutable = do
     hascurryinfo <- fileInPath "curry-info"
@@ -94,13 +94,20 @@ main = do
 -- In CGI mode, the package repository index is also updated.
 generateForPackage:: Options -> String -> String -> IO ()
 generateForPackage opts pkg vsn = do
+  let pkgid = pkg ++ "-" ++ vsn
   printWhenStatus opts $
-    "Generating infos for package '" ++ pkg ++ "-" ++ vsn ++ "' for " ++
+    "Generating infos for package '" ++ pkgid ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
-  when (optCGI opts) $ do  -- update repo index in CGI mode:
-    printWhenStatus opts "Update package repository index..."
-    callCurryInfo opts [ "--update" ]
+  when (null (optRequest opts)) $ do
+    printWhenStatus opts $
+      "Cleaning old information of package '" ++ pkgid ++ "'..."
+    let cleanopts = [ "--package=" ++ escapeString opts pkg
+                    , "--version=" ++ escapeString opts vsn, "--clean" ]
+    callCurryInfo opts cleanopts
+    when (optCGI opts) $ do  -- update repo index in CGI mode:
+      printWhenStatus opts "Update package repository index..."
+      callCurryInfo opts [ "--update" ]
   mods <- getPackageInfos opts pkg vsn Nothing
   mapM_ (generateForModule opts pkg vsn) mods
 
@@ -108,14 +115,11 @@ generateForPackage opts pkg vsn = do
 generateForModule :: Options -> String -> String -> String -> IO ()
 generateForModule opts pkg vsn mn = do
   genInfo []
-  let modopts = [ "--package=" ++ escapeString opts pkg
-                , "--version=" ++ escapeString opts vsn
-                , "--module="  ++ escapeString opts mn ]
-  when (null (optRequest opts)) $ do
-    printWhenStatus opts $ "Cleaning information of module '" ++ mn ++ "'..."
-    callCurryInfo opts (modopts ++ ["--clean"])
-  let ciopts  = "--force=2" : modopts
-      optreqs = optRequest opts
+  let ciopts = [ "--force=2"
+               , "--package=" ++ escapeString opts pkg
+               , "--version=" ++ escapeString opts vsn
+               , "--module="  ++ escapeString opts mn ]
+  let optreqs = optRequest opts
   if null optreqs
     then do
       infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
