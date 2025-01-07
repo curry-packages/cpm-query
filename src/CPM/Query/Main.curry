@@ -69,7 +69,8 @@ main = do
     _       ->
       if null args && optGenerate opts && not (null genfile)
         then do ls <- if genfile == "-" then getContents else readFile genfile
-                mapM_ (genFromLine opts) (lines ls)
+                mapM_ (genFromLine opts) -- ignore comment lines starting with #
+                      (filter (\l -> take 1 l /= "#") (lines ls))
         else do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
                              usageText
                 exitWith 1
@@ -77,10 +78,7 @@ main = do
   genFromLine opts l = case words l of
     [p,v] -> generateForPackage opts p v
     []    -> return () -- skip empty lines 
-    _     -> if take 1 l == "#"
-               then return () -- ignore comments
-               else hPutStrLn stderr $
-                      "Ignore illegal line in generate file: " ++ l
+    _     -> hPutStrLn stderr $ "Ignore illegal line in generate file: " ++ l
 
   checkExecutable = do
     hascurryinfo <- fileInPath "curry-info"
