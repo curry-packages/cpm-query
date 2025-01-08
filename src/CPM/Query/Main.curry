@@ -18,7 +18,7 @@
 ------------------------------------------------------------------------
 
 module CPM.Query.Main
-  ( main, askCurryInfoServer, askCurryInfoCmd)
+  ( main, askCurryInfoServer, askCurryInfoCmd )
  where
 
 import Control.Monad      ( unless, when, replicateM, replicateM_ )
@@ -50,7 +50,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 07/01/25)"
+  bannerText = "CPM Query Tool (Version of 08/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -200,21 +200,10 @@ getPackageInfos opts pkg vsn mbmod = do
 curryInfoBin :: String
 curryInfoBin = "curry-info"
 
--- The binary name of the curry-info tool together with verbosity option.
-curryInfoVerb :: Options -> String
-curryInfoVerb opts = unwords $
-  curryInfoBin : addColorCIOption opts ["--verbosity=" ++ show (optVerb opts)]
-
 --- Add the option `--color` to a list of `curry-info` options, if demanded.
 addColorCIOption :: Options -> [String] -> [String]
 addColorCIOption opts ciopts =
   if optColor opts then "--color" : ciopts else ciopts
-
--- Show and run a command (if not in dry-run mode).
-runCommand :: Options -> String -> IO ()
-runCommand opts cmd = do
-  when (optVerb opts > 2 || optDryRun opts) $ putStrLn $ "Executing: " ++ cmd
-  unless (optDryRun opts) $ system cmd >> return ()
 
 --- Transforms a possible qualified name into a pair of a module name
 --- (which might be empty) and an unqualified name.
@@ -291,15 +280,6 @@ escapeString :: Options -> String -> String
 escapeString opts s = if optCGI opts then string2urlencoded s
                                      else escapeShellString s
 
-callCurryInfo :: Options -> [String] -> IO ()
-callCurryInfo opts ciopts = do
-  let cmd = if optCGI opts
-              then "curl --max-time 3600 --silent --show-error '" ++
-                   optCGIURL opts ++ "?" ++
-                   intercalate "&" (addColorCIOption opts ciopts) ++ "'"
-              else unwords (curryInfoVerb opts : ciopts)
-  runCommand opts cmd
-
 -- From HTML.Base:
 -- Translates arbitrary strings into equivalent URL encoded strings.
 string2urlencoded :: String -> String
@@ -322,6 +302,32 @@ escapeShellString s
  where
   escapeSingleQuote c | c == '\'' = "'\\\''"
                       | otherwise = [c]
+
+-- The command and parameters to invoke `curry-info` depending on the
+-- options passed as the first parameter.
+-- The verbosity and color options are set according to these options.
+-- The second parameters are the actual options for the `curry-info` command.
+curryInfoCmd :: Options -> [String] -> (String, [String])
+curryInfoCmd opts ciopts =
+  if optCGI opts
+    then ("curl",
+          ["--max-time", "3600", "--silent", "--show-error",
+           "'" ++ optCGIURL opts ++ "?" ++
+           intercalate "&" (addColorCIOption opts ciopts) ++ "'"])
+    else (curryInfoBin,
+          addColorCIOption opts ["--verbosity=" ++ show (optVerb opts)] ++
+          ciopts)
+
+-- Calls `curry-info` locally or in CGI mode with the given parameters.
+-- In dry mode, show only the command.
+callCurryInfo :: Options -> [String] -> IO ()
+callCurryInfo opts ciopts = do
+  let (cmd,cmdopts) = curryInfoCmd opts ciopts
+  when (optVerb opts > 2 || optDryRun opts) $ putStrLn $ "Executing: " ++ cmd
+  unless (optDryRun opts) $ do
+    ec <- system (unwords (cmd : cmdopts))
+    when (ec > 0) $
+      printWhenStatus opts $ "Execution error! Return code: " ++ show ec
 
 ------------------------------------------------------------------------------
 --- This action starts `curry-info` in server mode and returns the result
@@ -399,14 +405,15 @@ askCurryInfoServer modname entkind req
 --- of the given request (third argument) for all entities in the module
 --- provided as the first argument. The requested result is returned in its
 --- string representation for each entity in the module.
---- The second argument is the kind of entity to be queried.
+--- If the first argument is `True`, the CGI `curry-info` server is queried.
+--- The third argument is the kind of entity to be queried.
 --- If it is `Unknown`, `Nothing` is returned.
 --- 
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
-askCurryInfoCmd :: String -> CurryEntity -> String
+askCurryInfoCmd :: Bool -> String -> CurryEntity -> String
                 -> IO (Maybe [(QName, String)])
-askCurryInfoCmd modname entkind req
+askCurryInfoCmd withcgi modname entkind req
   | entkind == Unknown = return Nothing
   | otherwise = do
     mres <- getPackageVersionOfModule modname
@@ -415,12 +422,16 @@ askCurryInfoCmd modname entkind req
       Just (pkg, vsn) -> do
         -- Note: force=0 is important to avoid loops if the analysis tools
         -- also use `curry-info`!
-        let alloption  = case entkind of Type   -> "--alltypes"
-                                         Class  -> "--allclasses"
-                                         _      -> "--alloperations"
-            cmdopts    = [ "--quiet", "-f0", "-p", pkg, "-x", vsn, "-m", modname
-                         , alloption, "--format=CurryTerm", req]
-        (ec, out, err) <- evalCmd "curry-info" cmdopts ""
+        let alloption = case entkind of Type   -> "--alltypes"
+                                        Class  -> "--allclasses"
+                                        _      -> "--alloperations"
+            queryopts = defaultOptions { optVerb = 0, optCGI = withcgi
+                                       , optCGIURL = curryInfoCGI }
+            ciopts    = [ "-f0", "--package=" ++ pkg, "--version=" ++ vsn
+                        , "--module=" ++ modname, alloption
+                        , "--format=CurryTerm", req]
+            (cmd,cmdopts) = curryInfoCmd queryopts ciopts
+        (ec, out, err) <- evalCmd cmd (map unApo cmdopts) ""
 
         if ec > 0
           then do putStrLn "Execution error. Output:"
@@ -430,6 +441,10 @@ askCurryInfoCmd modname entkind req
           else do let results = read out :: [(String, String)]
                   fmap Just (mapM readResult results)
  where
+  -- remove leading and trailing single quote characters:
+  unApo s = case s of c:cs@(_:_) | c == '\'' && last cs == '\'' -> init cs
+                      _                                         -> s
+
   readResult :: (String, String) -> IO (QName, String)
   readResult (obj, res) = do
     let (m, o) = read obj :: (String, String)
