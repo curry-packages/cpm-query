@@ -42,9 +42,12 @@ defaultRCProps =
   , Left "# Show all available information (no|yes):"
   , Right ("showall", "no")
   , Left ""
-  , Left "# URL of the web installation of curry-info (used with option --cgi)"
+  , Left "# Use the curry-info web service for requests (yes|no):"
+  , Right ("remote", "yes")
+  , Left ""
+  , Left "# URL of the web service of curry-info (used when remote=yes)"
   , Left "# (if empty: use default URL)"
-  , Right ("curryinfocgi", "")
+  , Right ("curryinfourl", "")
   , Left ""
   ]
 

@@ -6,8 +6,8 @@
 -------------------------------------------------------------------------
 
 module CPM.Query.Options
-  ( CurryEntity(..), Options(..), defaultOptions, processOptions
-  , usageText
+  ( CurryEntity(..), Options(..), defaultOptions, getDefaultOptions
+  , processOptions, usageText
   , printWhenStatus, printWhenIntermediate, printWhenAll
   )
  where
@@ -28,8 +28,13 @@ data Options = Options
   { optVerb      :: Int         -- verbosity (0: quiet, 1: status,
                                 --            2: intermediate, 3: all)
   , optHelp      :: Bool        -- if help info should be printed
+  , optPackage   :: String      -- the requested package
+  , optVersion   :: String      -- the requested version
+  , optModule    :: String      -- the requested module
+  , optEName     :: String      -- the name of the requested entity
   , optEntity    :: CurryEntity -- show the result for this kind of entity
   , optCLS       :: String      -- entity kind passed by Curry language server
+  , optAll       :: Bool        -- show information for all entities in a module
   , optColor     :: Bool        -- use colors in text output?
   , optDryRun    :: Bool        -- dry run, i.e., do not invoke curry-info?
   , optForce     :: Bool        -- force computation of analysis information?
@@ -41,16 +46,17 @@ data Options = Options
   , optRequest   :: [String]    -- specific requests for the entity?
   , optOutFormat :: String      -- output format
   , optShowAll   :: Bool        -- show all available information
-  , optCGI       :: Bool        -- use curry-info CGI to request information?
-  , optCGIURL    :: String      -- URL of the curry-info CGI script
+  , optRemote    :: Bool        -- use curry-info web service for requests?
+  , optRemoteURL :: String      -- URL of the curry-info web service
   }
 
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False Operation "" False False False False "" [] [] [] [] "Text"
-          False False ""
+  Options 1 False "" "" "" "" Operation "" False False False False False ""
+          [] [] [] [] "Text" False True ""
 
+--- The default options with values from the RC file taken into account.
 getDefaultOptions :: IO Options
 getDefaultOptions = do
   rcprops <- readRC
@@ -59,9 +65,10 @@ getDefaultOptions = do
       { optCRequests = readReqs (rcValue rcprops "classrequests")
       , optTRequests = readReqs (rcValue rcprops "typerequests")
       , optORequests = readReqs (rcValue rcprops "operationrequests")
-      , optShowAll = if rcValue rcprops "showall" == "yes" then True else False
-      , optCGIURL  = let rcurl = rcValue rcprops "curryinfocgi"
-                     in if null rcurl then curryInfoCGI else rcurl
+      , optShowAll   = if rcValue rcprops "showall"== "yes" then True else False
+      , optRemote    = if rcValue rcprops "remote" == "yes" then True else False
+      , optRemoteURL = let rcurl = rcValue rcprops "curryinfourl"
+                       in if null rcurl then curryInfoURL else rcurl
       }
  where
   readReqs s = if null s then [] else splitOn "," s
@@ -85,14 +92,20 @@ processOptions banner argv = do
                        Type      -> opts { optRequest = optTRequests opts }
                        Operation -> opts { optRequest = optORequests opts }
                        Unknown   -> opts
-  return (opts1, args)
+      opts2 = -- Generate on the web server only if --remote is explicitly used:
+              if optGenerate opts1 && "--remote" `notElem` argv
+                then opts1 { optRemote = False }
+                else opts1
+  return (opts2, args)
  where
   printUsage = putStrLn (banner ++ "\n" ++ usageText)
 
 -- Help text
 usageText :: String
 usageText =
-  usageInfo ("Usage: cpm-query [options] <module names> <entity name>\n" ++
+  usageInfo ("Usage: cpm-query [options] <module name> <entity name>\n" ++
+             "       cpm-query [options] <module name>\n" ++
+             "       cpm-query [options]\n" ++
              "       cpm-query [options] --generate <package> <version>\n" ++
              "       cpm-query [options] --generate <package> <version> <mod>\n")
             options
@@ -109,6 +122,15 @@ options =
   , Option "v" ["verbosity"]
            (OptArg (maybe (checkVerb 2) (safeReadNat checkVerb)) "<n>")
            "verbosity level:\n0: quiet (same as `-q')\n1: show status messages (default)\n2: show more details (same as `-v')\n3: show all details"
+  , Option "p" ["package"]
+       (ReqArg (\arg opts -> opts { optPackage = arg }) "<pkg>")
+       "requested package"
+  , Option "x" ["version"]
+       (ReqArg (\arg opts -> opts { optVersion = arg }) "<vsn>")
+       "requested version"
+  , Option "m" ["module"]
+       (ReqArg (\arg opts -> opts { optModule = arg }) "<mod>")
+       "requested module"
   , Option "t" ["type"]
            (NoArg (\opts -> opts { optEntity = Type }))
           "show information about a type"
@@ -121,6 +143,9 @@ options =
   , Option "" ["clskind"]
            (ReqArg checkKind "<k>")
            "entity kind provided by the Curry language server\n(ValueFunction|TypeData|Class|...)"
+  , Option "" ["all"]
+           (NoArg (\opts -> opts { optAll = True }))
+           "show information of all entities in a module"
   , Option "" ["color"]
            (NoArg (\opts -> opts { optColor = True }))
            "use colors in text output"
@@ -147,9 +172,12 @@ options =
   , Option "" ["showall"]
            (NoArg (\opts -> opts { optShowAll = True }))
            "show all available information (no generation)"
-  , Option "" ["cgi"]
-           (NoArg (\opts -> opts { optCGI = True }))
-           "use 'curry-info' CGI server to fetch information"
+  , Option "" ["local"]
+           (NoArg (\opts -> opts { optRemote = False }))
+           "use local installation of 'curry-info'"
+  , Option "" ["remote"]
+           (NoArg (\opts -> opts { optRemote = True }))
+           "use 'curry-info' web service to fetch information\n(default)"
   ]
  where
   safeReadNat opttrans s opts = case readNat s of

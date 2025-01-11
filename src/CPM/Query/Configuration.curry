@@ -6,7 +6,7 @@
 -------------------------------------------------------------------------
 
 module CPM.Query.Configuration
-  ( CurryEntity(..), defaultRequests, curryInfoCGI
+  ( CurryEntity(..), defaultRequests, curryInfoURL
   )
  where
 
@@ -23,6 +23,6 @@ defaultRequests cent = case cent of
   Class      -> [ "definition" ]
   Unknown    -> []
 
---- The URL of the `curry-info` CGI script.
-curryInfoCGI :: String
-curryInfoCGI = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
+--- The URL of the `curry-info` web service CGI script.
+curryInfoURL :: String
+curryInfoURL = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
