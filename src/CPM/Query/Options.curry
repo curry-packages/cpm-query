@@ -37,7 +37,8 @@ data Options = Options
   , optAll       :: Bool        -- show information for all entities in a module
   , optColor     :: Bool        -- use colors in text output?
   , optDryRun    :: Bool        -- dry run, i.e., do not invoke curry-info?
-  , optForce     :: Bool        -- force computation of analysis information?
+  , optForce     :: Int         -- force computation of analysis information?
+                                -- (0: no gen., 1: only if missing, 2: always)
   , optGenerate  :: Bool        -- generate information for a package version?
   , optGenFrom   :: String      -- file containing package/versions to generate
   , optCRequests :: [String]    -- default class requests
@@ -53,7 +54,7 @@ data Options = Options
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False "" "" "" "" Operation "" False False False False False ""
+  Options 1 False "" "" "" "" Operation "" False False False 0 False ""
           [] [] [] [] "Text" False True ""
 
 --- The default options with values from the RC file taken into account.
@@ -85,18 +86,11 @@ processOptions banner argv = do
   when (optHelp opts) (printUsage >> exitWith 0)
   when (not (null (optGenFrom opts)) && not (optGenerate opts))
        (putStrLn "Superfluous file with generate data!" >> exitWith 1)
-  let opts1 = if any ("--request" `isPrefixOf`) argv || not (optGenerate opts)
-                then opts
-                else case optEntity opts of
-                       Class     -> opts { optRequest = optCRequests opts }
-                       Type      -> opts { optRequest = optTRequests opts }
-                       Operation -> opts { optRequest = optORequests opts }
-                       Unknown   -> opts
-      opts2 = -- Generate on the web server only if --remote is explicitly used:
-              if optGenerate opts1 && "--remote" `notElem` argv
-                then opts1 { optRemote = False }
-                else opts1
-  return (opts2, args)
+  let opts1 = -- Generate on the web server only if --remote is explicitly used:
+              if optGenerate opts && "--remote" `notElem` argv
+                then opts { optRemote = False }
+                else opts
+  return (opts1, args)
  where
   printUsage = putStrLn (banner ++ "\n" ++ usageText)
 
@@ -153,7 +147,7 @@ options =
            (NoArg (\opts -> opts { optDryRun = True }))
            "dry run, i.e., do not run `curry-info` analyses"
   , Option "" ["force"]
-           (NoArg (\opts -> opts { optForce = True }))
+           (NoArg (\opts -> opts { optForce = 1 }))
            "force generation of properties"
   , Option "" ["generate"]
            (NoArg (\opts -> opts { optGenerate = True }))

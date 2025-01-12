@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 11/01/25)"
+  bannerText = "CPM Query Tool (Version of 12/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -103,14 +103,15 @@ generateForPackage opts pkg vsn = do
     "Generating infos for package '" ++ pkgid ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
+  let pkgvsnopts = [ "--package=" ++ pkg, "--version=" ++ vsn ]
   when (null (optRequest opts)) $ do
     printWhenStatus opts $
       "Cleaning old information of package '" ++ pkgid ++ "'..."
-    let cleanopts = [ "--package=" ++ pkg, "--version=" ++ vsn, "--clean" ]
-    callCurryInfo opts cleanopts
+    callCurryInfo opts (pkgvsnopts ++ ["--clean"])
     when (optRemote opts) $ do  -- update repo index in remote mode:
       printWhenStatus opts "Update package repository index..."
       callCurryInfo opts [ "--update" ]
+  callCurryInfo opts (pkgvsnopts ++ ["--force=2", "documentation"])
   mods <- getPackageModules opts pkg vsn
   mapM_ (generateForModule opts pkg vsn) mods
 
@@ -120,17 +121,18 @@ generateForModule opts pkg vsn mn = do
   genInfoMsg []
   let ciopts = [ "--force=2", "--package=" ++ pkg, "--version=" ++ vsn
                , "--module="  ++ mn ]
+  infoAndCallCurry ciopts ["documentation", "sourcecode"]
   let optreqs = optRequest opts
   if null optreqs
     then do
       infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
-      infoAndCallCurry ciopts ("--alltypes" : defaultRequests Type)
+      infoAndCallCurry ciopts ("--alltypes"   : defaultRequests Type)
       mapM_ (genOpRequest ciopts)
             (union ["signature", "definition", "documentation"]
                    (defaultRequests Operation))
     else case optEntity opts of
-      Class     -> infoAndCallCurry ciopts ("--allclasses"    : optreqs)
-      Type      -> infoAndCallCurry ciopts ("--alltypes"      : optreqs)
+      Class     -> infoAndCallCurry ciopts ("--allclasses" : optreqs)
+      Type      -> infoAndCallCurry ciopts ("--alltypes"   : optreqs)
       Operation -> mapM_ (genOpRequest ciopts) optreqs
       Unknown   -> return ()
  where
@@ -138,12 +140,10 @@ generateForModule opts pkg vsn mn = do
   singleOpRequest req = "cass-" `isPrefixOf` req || req == "failfree"
 
   genOpRequest ciopts req
-    | singleOpRequest req
-    = -- compute request only for dummy operation since this sets
-      -- the analysis results for all operations:
-      infoAndCallCurry ciopts ["--operation=", req]
-    | otherwise
-    = infoAndCallCurry ciopts ["--alloperations", req]
+    -- for a singleOpRequest, compute request only for dummy operation since
+    -- this sets the analysis results for all operations:
+    | singleOpRequest req = infoAndCallCurry ciopts ["--operation=", req]
+    | otherwise           = infoAndCallCurry ciopts ["--alloperations", req]
     
   infoAndCallCurry ciopts reqs = do
     genInfoMsg reqs
@@ -152,32 +152,6 @@ generateForModule opts pkg vsn mn = do
   genInfoMsg req = printWhenStatus opts $
     "Generating infos for '" ++ mn ++
     (if null req then "" else "' and '" ++ unwords req) ++ "'..."
-
---- The binary name of the curry-info tool.
-curryInfoBin :: String
-curryInfoBin = "curry-info"
-
---- Add the option `--color` to a list of `curry-info` options, if demanded.
-addColorCIOption :: Options -> [String] -> [String]
-addColorCIOption opts ciopts =
-  if optColor opts then "--color" : ciopts else ciopts
-
---- Transforms a possible qualified name into a pair of a module name
---- (which might be empty) and an unqualified name.
-fromQName :: String -> (String,String)
-fromQName = fromQN ""
- where
-  fromQN mp s =
-    let (m,dotn) = break (=='.') s
-    in if null dotn || not (isModuleID m)
-         then (mp,s)
-         else if null mp then fromQN m (tail dotn)
-                         else fromQN (mp ++ '.':m) (tail dotn)
-
-  -- Is a string a (non-hierarchical) module identifier?
-  isModuleID :: String -> Bool
-  isModuleID []     = False
-  isModuleID (x:xs) = isAlpha x && all (\c -> isAlphaNum c || c `elem` "'_") xs
 
 
 ------------------------------------------------------------------------------
@@ -191,25 +165,31 @@ queryModuleEntity opts0 mname ename = do
                     then getPackageVersion opts1
                     else return (optPackage opts1, optVersion opts1)
   -- do something with package, version, module, and function:
-  let edescr = if optVerb opts1 > 1
+  let entity = optEntity opts1
+      edescr = if optVerb opts1 > 1
                  then unlines [ "Package name   : " ++ pname
                               , "Package version: " ++ vers
                               , "Module name    : " ++ mname
                               , "Entity name    : " ++ ename ]
                  else (if null ename
                          then "Module " ++ mname
-                         else show (optEntity opts1) ++ " " ++
-                              mname ++ "." ++ ename) ++
+                         else show entity ++ " " ++ mname ++ "." ++ ename) ++
                       " (package " ++ pname ++ "-" ++ vers ++ ")"
   putStrLn edescr
-  let opts2   = opts1 { optPackage = pname, optVersion = vers }
-      request = if null (optRequest opts2)
-                  then if null ename
-                         then [ "classes", "types", "operations" ]
-                         else defaultRequests (optEntity opts2)
-                  else optRequest opts2
-      ciopts  = curryInfoOptions opts2 ++ request
-  callCurryInfo opts2 ciopts
+  let requests = if null (optRequest opts1)
+                   then if null ename
+                          then [ "classes", "types", "operations" ]
+                          else let rcreq = case entity of
+                                             Class     -> optCRequests opts1
+                                             Type      -> optTRequests opts1
+                                             Operation -> optORequests opts1
+                                             Unknown   -> []
+                               in if null rcreq then defaultRequests entity
+                                                else rcreq
+                   else optRequest opts1
+      opts2    = opts1 { optPackage = pname, optVersion = vers
+                       , optRequest = requests }
+  callCurryInfo opts2 (curryInfoOptions opts2)
  where
   getPackageVersion opts = do
     setCurryPathIfNecessary
@@ -227,32 +207,30 @@ queryModuleEntity opts0 mname ename = do
             "registered CPM package!") >> exitWith 0)
          return
 
--- Query a package provided in the option argument.
+-- Query a package specified in the option argument.
 queryPackage :: Options -> IO ()
 queryPackage opts0 = do
   let opts = opts0 { optModule = "", optEName = ""
-                   , optAll = False, optShowAll = False }
-  let request = if null (optRequest opts)
-                  then if null (optVersion opts)
-                         then [ "versions" ]
-                         else [ "modules" ]
-                  else optRequest opts
-      ciopts  = curryInfoOptions opts ++ request
-  callCurryInfo opts ciopts
+                   , optAll = False, optShowAll = False
+                   , optRequest = if null (optRequest opts0)
+                                    then if null (optVersion opts0)
+                                           then [ "versions" ]
+                                           else [ "modules" ]
+                                    else optRequest opts0 }
+  callCurryInfo opts (curryInfoOptions opts)
 
 -- Generate curry-info options from cpm-query options.
 curryInfoOptions :: Options -> [String]
 curryInfoOptions opts =
-  [ "--format=" ++ optOutFormat opts ] ++
-  (if optForce opts && not (optShowAll opts) then ["-f1"]
-                                             else ["-f0"]) ++
+  [ "--format=" ++ optOutFormat opts
+  , if optShowAll opts then "-f0" else "-f" ++ show (optForce opts) ] ++
   (if optShowAll opts then ["--showall"] else []) ++
   (if null (optPackage opts) then [] else ["--package=" ++ optPackage opts]) ++
   (if null (optVersion opts) then [] else ["--version=" ++ optVersion opts]) ++
   (if null (optModule  opts) then [] else ["--module="  ++ optModule opts]) ++
-  (if optAll opts
-     then allEntOpt
-     else if null ename then [] else entityOpt)
+  (if optAll opts then allEntOpt
+                  else if null ename then [] else entityOpt) ++
+  optRequest opts
  where
   ename = optEName opts
   allEntOpt = case optEntity opts of
@@ -276,11 +254,12 @@ curryInfoCmd opts ciopts =
     then ("curl",
           ["--max-time", "3600", "--silent", "--show-error",
            optRemoteURL opts ++ "?" ++
-           intercalate "&"
-             (addColorCIOption opts (map string2urlencoded ciopts))])
+           intercalate "&" (addColorOption (map string2urlencoded ciopts))])
     else (curryInfoBin,
-          addColorCIOption opts ["--verbosity=" ++ show (optVerb opts)] ++
-          ciopts)
+          addColorOption ["--verbosity=" ++ show (optVerb opts)] ++ ciopts)
+ where
+  -- Add the option `--color` to a list of `curry-info` options, if demanded.
+  addColorOption ncopts = if optColor opts then "--color" : ncopts else ncopts
 
 -- Calls `curry-info` locally or in remote mode with the given parameters.
 -- In dry mode, show only the command.
@@ -387,15 +366,14 @@ askCurryInfoCmd useserver modname entkind req
       Just (pkg, vsn) -> do
         -- Note: force=0 is important to avoid loops if the analysis tools
         -- also use `curry-info`!
-        let alloption = case entkind of Type   -> "--alltypes"
-                                        Class  -> "--allclasses"
-                                        _      -> "--alloperations"
-            queryopts = defaultOptions { optVerb = 0, optRemote = useserver
-                                       , optRemoteURL = curryInfoURL }
-            ciopts    = [ "-f0", "--package=" ++ pkg, "--version=" ++ vsn
-                        , "--module=" ++ modname, alloption
-                        , "--format=CurryTerm", req]
-            (cmd,cmdopts) = curryInfoCmd queryopts ciopts
+        let queryopts = defaultOptions
+                          { optForce = 0, optVerb = 0, optAll = True
+                          , optRemote = useserver, optRemoteURL = curryInfoURL
+                          , optOutFormat = "CurryTerm"
+                          , optPackage = pkg, optVersion = vsn
+                          , optModule = modname
+                          , optRequest = [req] }
+            (cmd,cmdopts) = curryInfoCmd queryopts (curryInfoOptions queryopts)
         (ec, out, err) <- evalCmd cmd cmdopts ""
         if ec > 0
           then do putStrLn "Execution error. Output:"
@@ -487,6 +465,27 @@ getPackageModuleOps opts pkg vsn = do
 
 ----------------------------------------------------------------------------
 -- Auxiliaries:
+
+--- The binary name of the curry-info tool.
+curryInfoBin :: String
+curryInfoBin = "curry-info"
+
+--- Transforms a possible qualified name into a pair of a module name
+--- (which might be empty) and an unqualified name.
+fromQName :: String -> (String,String)
+fromQName = fromQN ""
+ where
+  fromQN mp s =
+    let (m,dotn) = break (=='.') s
+    in if null dotn || not (isModuleID m)
+         then (mp,s)
+         else if null mp then fromQN m (tail dotn)
+                         else fromQN (mp ++ '.':m) (tail dotn)
+
+  -- Is a string a (non-hierarchical) module identifier?
+  isModuleID :: String -> Bool
+  isModuleID []     = False
+  isModuleID (x:xs) = isAlpha x && all (\c -> isAlphaNum c || c `elem` "'_") xs
 
 -- Translates arbitrary strings into equivalent URL encoded strings.
 string2urlencoded :: String -> String
