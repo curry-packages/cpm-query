@@ -86,7 +86,7 @@ for all modules in package `base` in version `3.3.0` can be done by
     > cpm-query --generate base 3.3.0
 
 This cleans all old information for this packages and generates
-some default information for each class, type, and operation
+the information for each class, type, and operation
 for all modules of this package. To generate specific information
 (i.e., requests supported by `curry-info`), one can use the `--request` option.
 For instance, the documentation of all operations of package `process`

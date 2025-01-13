@@ -6,7 +6,8 @@
 -------------------------------------------------------------------------
 
 module CPM.Query.Configuration
-  ( CurryEntity(..), defaultRequests, curryInfoURL
+  ( CurryEntity(..), defaultShowRequests, curryInfoURL
+  , packageVersionRequests, classRequests, typeRequests, operationRequests
   )
  where
 
@@ -14,9 +15,9 @@ module CPM.Query.Configuration
 data CurryEntity = Operation | Type | Class | Unknown
   deriving (Eq, Show)
 
---- The default requests for various kinds entities.
-defaultRequests :: CurryEntity -> [String]
-defaultRequests cent = case cent of
+--- The default requests to be shown for various kinds entities.
+defaultShowRequests :: CurryEntity -> [String]
+defaultShowRequests cent = case cent of
   Operation  -> [ "documentation", "cass-deterministic", "cass-total"
                 , "cass-terminating", "cass-demand", "failfree" ]
   Type       -> [ "documentation", "definition" ]
@@ -26,3 +27,23 @@ defaultRequests cent = case cent of
 --- The URL of the `curry-info` web service CGI script.
 curryInfoURL :: String
 curryInfoURL = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
+
+--- The requests to be generated for package versions.
+packageVersionRequests :: [String]
+packageVersionRequests = ["documentation", "categories", "dependencies"]
+
+--- The requests to be generated for classes.
+classRequests :: [String]
+classRequests = ["documentation", "methods", "definition"]
+
+--- The requests to be generated for types.
+typeRequests :: [String]
+typeRequests = ["documentation", "constructors", "definition"]
+
+--- The requests to be generated for operations.
+operationRequests :: [String]
+operationRequests =
+  [ "documentation", "definition", "signature", "infix", "precedence"
+  , "cass-demand", "cass-deterministic", "cass-indeterministic"
+  , "cass-solcomplete", "cass-terminating", "cass-total", "cass-values"
+  , "failfree" ]

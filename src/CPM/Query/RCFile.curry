@@ -28,15 +28,15 @@ defaultRCProps =
   [ Left "# Configuration file for command 'cpm-query'"
   , Left ""
   , Left "# Requests for classes, separated by comma:"
-  , Left $ "# default: " ++ intercalate "," (defaultRequests Class)
+  , Left $ "# default: " ++ intercalate "," (defaultShowRequests Class)
   , Right ("classrequests", "")
   , Left ""
   , Left "# Requests for types, separated by comma:"
-  , Left $ "# default: " ++ intercalate "," (defaultRequests Type)
+  , Left $ "# default: " ++ intercalate "," (defaultShowRequests Type)
   , Right ("typerequests", "")
   , Left ""
   , Left "# Requests for operations, separated by comma:"
-  , Left $ "# default: " ++ intercalate "," (defaultRequests Operation)
+  , Left $ "# default: " ++ intercalate "," (defaultShowRequests Operation)
   , Right ("operationrequests", "")
   , Left ""
   , Left "# Show all available information (no|yes):"

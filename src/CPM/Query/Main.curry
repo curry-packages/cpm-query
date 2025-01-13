@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 12/01/25)"
+  bannerText = "CPM Query Tool (Version of 13/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -111,7 +111,8 @@ generateForPackage opts pkg vsn = do
     when (optRemote opts) $ do  -- update repo index in remote mode:
       printWhenStatus opts "Update package repository index..."
       callCurryInfo opts [ "--update" ]
-  callCurryInfo opts (pkgvsnopts ++ ["--force=2", "documentation"])
+    callCurryInfo opts [ "--force=2", "--package=" ++ pkg, "versions" ]
+    callCurryInfo opts (pkgvsnopts ++ "--force=2" : packageVersionRequests)
   mods <- getPackageModules opts pkg vsn
   mapM_ (generateForModule opts pkg vsn) mods
 
@@ -121,15 +122,13 @@ generateForModule opts pkg vsn mn = do
   genInfoMsg []
   let ciopts = [ "--force=2", "--package=" ++ pkg, "--version=" ++ vsn
                , "--module="  ++ mn ]
-  infoAndCallCurry ciopts ["documentation", "sourcecode"]
   let optreqs = optRequest opts
   if null optreqs
     then do
-      infoAndCallCurry ciopts ("--allclasses" : defaultRequests Class)
-      infoAndCallCurry ciopts ("--alltypes"   : defaultRequests Type)
-      mapM_ (genOpRequest ciopts)
-            (union ["signature", "definition", "documentation"]
-                   (defaultRequests Operation))
+      infoAndCallCurry ciopts ["documentation", "sourcecode"]
+      infoAndCallCurry ciopts ("--allclasses" : classRequests)
+      infoAndCallCurry ciopts ("--alltypes"  : typeRequests)
+      mapM_ (genOpRequest ciopts) operationRequests
     else case optEntity opts of
       Class     -> infoAndCallCurry ciopts ("--allclasses" : optreqs)
       Type      -> infoAndCallCurry ciopts ("--alltypes"   : optreqs)
@@ -152,7 +151,6 @@ generateForModule opts pkg vsn mn = do
   genInfoMsg req = printWhenStatus opts $
     "Generating infos for '" ++ mn ++
     (if null req then "" else "' and '" ++ unwords req) ++ "'..."
-
 
 ------------------------------------------------------------------------------
 -- Query an entity of a given module. The module is looked up in the
@@ -177,14 +175,14 @@ queryModuleEntity opts0 mname ename = do
                       " (package " ++ pname ++ "-" ++ vers ++ ")"
   putStrLn edescr
   let requests = if null (optRequest opts1)
-                   then if null ename
+                   then if null ename && not (optAll opts1)
                           then [ "classes", "types", "operations" ]
                           else let rcreq = case entity of
                                              Class     -> optCRequests opts1
                                              Type      -> optTRequests opts1
                                              Operation -> optORequests opts1
                                              Unknown   -> []
-                               in if null rcreq then defaultRequests entity
+                               in if null rcreq then defaultShowRequests entity
                                                 else rcreq
                    else optRequest opts1
       opts2    = opts1 { optPackage = pname, optVersion = vers
