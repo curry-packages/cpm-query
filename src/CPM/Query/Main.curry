@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 13/01/25)"
+  bannerText = "CPM Query Tool (Version of 14/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -125,7 +125,7 @@ generateForModule opts pkg vsn mn = do
   let optreqs = optRequest opts
   if null optreqs
     then do
-      infoAndCallCurry ciopts ["documentation", "sourcecode"]
+      infoAndCallCurry ciopts moduleRequests
       infoAndCallCurry ciopts ("--allclasses" : classRequests)
       infoAndCallCurry ciopts ("--alltypes"  : typeRequests)
       mapM_ (genOpRequest ciopts) operationRequests

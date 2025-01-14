@@ -7,7 +7,8 @@
 
 module CPM.Query.Configuration
   ( CurryEntity(..), defaultShowRequests, curryInfoURL
-  , packageVersionRequests, classRequests, typeRequests, operationRequests
+  , packageVersionRequests, moduleRequests
+  , classRequests, typeRequests, operationRequests
   )
  where
 
@@ -21,7 +22,7 @@ defaultShowRequests cent = case cent of
   Operation  -> [ "documentation", "cass-deterministic", "cass-total"
                 , "cass-terminating", "cass-demand", "failfree" ]
   Type       -> [ "documentation", "definition" ]
-  Class      -> [ "definition" ]
+  Class      -> [ "documentation", "definition" ]
   Unknown    -> []
 
 --- The URL of the `curry-info` web service CGI script.
@@ -30,7 +31,14 @@ curryInfoURL = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
 
 --- The requests to be generated for package versions.
 packageVersionRequests :: [String]
-packageVersionRequests = ["documentation", "categories", "dependencies"]
+packageVersionRequests =
+  ["documentation", "categories", "dependencies", "modules"]
+
+--- The requests to be generated for modules.
+moduleRequests :: [String]
+moduleRequests =
+  [ "documentation", "sourcecode", "cass-unsafemodule"
+  , "classes", "types", "operations" ]
 
 --- The requests to be generated for classes.
 classRequests :: [String]
