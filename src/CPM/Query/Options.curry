@@ -17,6 +17,7 @@ import Data.Char             ( toLower )
 import Data.List             ( findIndices, isPrefixOf, splitOn )
 import Numeric               ( readNat )
 import System.Console.GetOpt
+import System.IO             ( hIsTerminalDevice, stdout )
 
 import System.Process        ( exitWith )
 
@@ -79,18 +80,20 @@ getDefaultOptions = do
 processOptions :: String -> [String] -> IO (Options,[String])
 processOptions banner argv = do
   dfltoptions <- getDefaultOptions
+  isterminal <- hIsTerminalDevice stdout
+  let opts0 = dfltoptions { optColor = isterminal }
   let (funopts, args, opterrors) = getOpt Permute options argv
-      opts = foldl (flip id) dfltoptions funopts
+      opts1 = foldl (flip id) opts0 funopts
   unless (null opterrors)
          (putStr (unlines opterrors) >> printUsage >> exitWith 1)
-  when (optHelp opts) (printUsage >> exitWith 0)
-  when (not (null (optGenFrom opts)) && not (optGenerate opts))
+  when (optHelp opts1) (printUsage >> exitWith 0)
+  when (not (null (optGenFrom opts1)) && not (optGenerate opts1))
        (putStrLn "Superfluous file with generate data!" >> exitWith 1)
-  let opts1 = -- Generate on the web server only if --remote is explicitly used:
-              if optGenerate opts && "--remote" `notElem` argv
-                then opts { optRemote = False }
-                else opts
-  return (opts1, args)
+  let opts2 = -- Generate on the web server only if --remote is explicitly used:
+              if optGenerate opts1 && "--remote" `notElem` argv
+                then opts1 { optRemote = False }
+                else opts1
+  return (opts2, args)
  where
   printUsage = putStrLn (banner ++ "\n" ++ usageText)
 
@@ -142,7 +145,10 @@ options =
            "show information of all entities in a module"
   , Option "" ["color"]
            (NoArg (\opts -> opts { optColor = True }))
-           "use colors in text output"
+           "use colors in text output (default if terminal)"
+  , Option "" ["nocolor"]
+           (NoArg (\opts -> opts { optColor = False }))
+           "do not use colors in text output"
   , Option "d" ["dry"]
            (NoArg (\opts -> opts { optDryRun = True }))
            "dry run, i.e., do not run `curry-info` analyses"

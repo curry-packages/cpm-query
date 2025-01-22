@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 14/01/25)"
+  bannerText = "CPM Query Tool (Version of 22/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -136,7 +136,8 @@ generateForModule opts pkg vsn mn = do
       Unknown   -> return ()
  where
   -- is the request one which generates infos for all operations at once?
-  singleOpRequest req = "cass-" `isPrefixOf` req || req == "failfree"
+  singleOpRequest req = "cass-" `isPrefixOf` req ||
+                        req `elem` ["failfree", "iotype"]
 
   genOpRequest ciopts req
     -- for a singleOpRequest, compute request only for dummy operation since

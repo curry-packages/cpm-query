@@ -54,4 +54,4 @@ operationRequests =
   [ "documentation", "definition", "signature", "infix", "precedence"
   , "cass-demand", "cass-deterministic", "cass-indeterministic"
   , "cass-solcomplete", "cass-terminating", "cass-total", "cass-values"
-  , "failfree" ]
+  , "failfree", "iotype" ]
