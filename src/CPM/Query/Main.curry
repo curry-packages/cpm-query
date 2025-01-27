@@ -377,16 +377,28 @@ askCurryInfoCmd useserver modname entkind req
         if ec > 0
           then do putStrLn "Execution error. Output:"
                   unless (null out) $ putStrLn out
-                  unless (null err) $ putStrLn err
+                  unless (null err) $ hPutStrLn stderr err
                   return Nothing
-          else do let results = read out :: [(String, String)]
-                  fmap Just (mapM readResult results)
+          else do
+            let mbres = do results <- (safeRead out :: Maybe [(String, String)])
+                           mapM readResult results
+            maybe (readError out) (return . Just) mbres
  where
-  readResult :: (String, String) -> IO (QName, String)
+  readError s = do hPutStrLn stderr $ "Error reading output:\n" ++ s
+                   return Nothing
+                
+  readResult :: (String, String) -> Maybe (QName, String)
   readResult (obj, res) = do
-    let (m, o) = read obj :: (String, String)
-        [(_, result)] = read res :: [(String, String)]
+    (m, o) <- (safeRead obj :: Maybe (String, String))
+    [(_, result)] <- (safeRead res :: Maybe [(String, String)])
     return ((m, o), result)
+
+-- This operation tries to read a value from a string and returns Nothing
+-- in case of a read failure.
+safeRead :: Read a => String -> Maybe a
+safeRead s = case reads s of
+    [(x, bs)] | all isSpace bs -> Just x
+    _                          -> Nothing
 
 ----------------------------------------------------------------------------
 --- Query `curry-info` with some request where the options are taken
