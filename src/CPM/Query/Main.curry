@@ -346,17 +346,18 @@ askCurryInfoServer modname entkind req
 ------------------------------------------------------------------------------
 --- This action uses the `curry-info` command to return the result
 --- of the given request (third argument) for all entities in the module
---- provided as the first argument. The requested result is returned in its
+--- provided as the third argument. The requested result is returned in its
 --- string representation for each entity in the module.
 --- If the first argument is `True`, the `curry-info` server is queried.
---- The third argument is the kind of entity to be queried.
+--- The second is the verbosity (where 0 means quiet).
+--- The fourth argument is the kind of entity to be queried.
 --- If it is `Unknown`, `Nothing` is returned.
 --- 
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
-askCurryInfoCmd :: Bool -> String -> CurryEntity -> String
+askCurryInfoCmd :: Bool -> Int -> String -> CurryEntity -> String
                 -> IO (Maybe [(QName, String)])
-askCurryInfoCmd useserver modname entkind req
+askCurryInfoCmd useserver verb modname entkind req
   | entkind == Unknown = return Nothing
   | otherwise = do
     mres <- getPackageVersionOfModule modname
@@ -366,26 +367,34 @@ askCurryInfoCmd useserver modname entkind req
         -- Note: force=0 is important to avoid loops if the analysis tools
         -- also use `curry-info`!
         let queryopts = defaultOptions
-                          { optForce = 0, optVerb = 0, optAll = True
+                          { optForce = 0, optVerb = verb, optAll = True
                           , optRemote = useserver, optRemoteURL = curryInfoURL
                           , optOutFormat = "CurryTerm"
                           , optPackage = pkg, optVersion = vsn
                           , optModule = modname
                           , optRequest = [req] }
             (cmd,cmdopts) = curryInfoCmd queryopts (curryInfoOptions queryopts)
+        when (verb > 1) $ hPutStrLn stderr $
+          unwords $ ["Executing:", cmd] ++ cmdopts
         (ec, out, err) <- evalCmd cmd cmdopts ""
         if ec > 0
-          then do putStrLn "Execution error. Output:"
-                  unless (null out) $ putStrLn out
-                  unless (null err) $ hPutStrLn stderr err
+          then do when (verb > 0) $ do
+                    hPutStrLn stderr $ line ++ "Execution error. Output:"
+                    unless (null out) $ hPutStrLn stderr out
+                    unless (null err) $ hPutStrLn stderr err
+                    hPutStrLn stderr line
                   return Nothing
           else do
             let mbres = do results <- (safeRead out :: Maybe [(String, String)])
                            mapM readResult results
             maybe (readError out) (return . Just) mbres
  where
-  readError s = do hPutStrLn stderr $ "Error reading output:\n" ++ s
-                   return Nothing
+  line = take 70 (repeat '-') ++ "\n"
+
+  readError s = do
+    when (verb > 0) $ hPutStrLn stderr $
+      line ++ "Error reading output:\n" ++ s ++ line
+    return Nothing
                 
   readResult :: (String, String) -> Maybe (QName, String)
   readResult (obj, res) = do
