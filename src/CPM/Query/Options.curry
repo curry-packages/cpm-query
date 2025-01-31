@@ -50,13 +50,19 @@ data Options = Options
   , optShowAll   :: Bool        -- show all available information
   , optRemote    :: Bool        -- use curry-info web service for requests?
   , optRemoteURL :: String      -- URL of the curry-info web service
+  , optMaxTime   :: Int         -- max-time (in seconds) for `curl` connections
   }
+
+--- Default value for option `--maxtime` (will be increased if `--generate`
+--- is set).
+defaultMaxTime :: Int
+defaultMaxTime = 3
 
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
   Options 1 False "" "" "" "" Operation "" False False False 0 False ""
-          [] [] [] [] "Text" False True ""
+          [] [] [] [] "Text" False True "" defaultMaxTime
 
 --- The default options with values from the RC file taken into account.
 getDefaultOptions :: IO Options
@@ -156,7 +162,7 @@ options =
            (NoArg (\opts -> opts { optForce = 1 }))
            "force generation of properties"
   , Option "" ["generate"]
-           (NoArg (\opts -> opts { optGenerate = True }))
+           (NoArg (\opts -> opts { optGenerate = True, optMaxTime = 3600 }))
            "generate analysis infos for a package version"
   , Option "" ["from"]
            (ReqArg (\f opts -> opts { optGenFrom = f }) "<f>")
@@ -178,6 +184,10 @@ options =
   , Option "" ["remote"]
            (NoArg (\opts -> opts { optRemote = True }))
            "use 'curry-info' web service to fetch information\n(default)"
+  , Option "" ["maxtime"]
+           (ReqArg (safeReadNat (\n opts -> opts { optMaxTime = n })) "<t>")
+           ("maximum time (in seconds) for remote web service\n(default: " ++
+            show defaultMaxTime ++ ")")
   ]
  where
   safeReadNat opttrans s opts = case readNat s of

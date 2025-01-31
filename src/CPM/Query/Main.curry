@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 22/01/25)"
+  bannerText = "CPM Query Tool (Version of 31/01/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -251,7 +251,7 @@ curryInfoCmd :: Options -> [String] -> (String, [String])
 curryInfoCmd opts ciopts =
   if optRemote opts
     then ("curl",
-          ["--max-time", "3600", "--silent", "--show-error",
+          ["--max-time", show (optMaxTime opts), "--silent", "--show-error",
            optRemoteURL opts ++ "?" ++
            intercalate "&" (addColorOption (map string2urlencoded ciopts))])
     else (curryInfoBin,
@@ -270,7 +270,9 @@ callCurryInfo opts ciopts = do
   unless (optDryRun opts) $ do
     ec <- system cmd
     when (ec > 0) $
-      printWhenStatus opts $ "Execution error! Return code: " ++ show ec
+      if optRemote opts && ec == 28 -- timeout return code of `curl`
+        then putStrLn "(timeout from CurryInfo web service)"
+        else printWhenStatus opts $ "Execution error! Return code: " ++ show ec
 
 ------------------------------------------------------------------------------
 --- This action starts `curry-info` in server mode and returns the result
@@ -366,8 +368,10 @@ askCurryInfoCmd useserver verb modname entkind req
       Just (pkg, vsn) -> do
         -- Note: force=0 is important to avoid loops if the analysis tools
         -- also use `curry-info`!
+        -- Verbosity 0/quiet is also important, otherwise buffer for stderr
+        -- will be filled in the `evalCmd` call so that it might overflow.
         let queryopts = defaultOptions
-                          { optForce = 0, optVerb = verb, optAll = True
+                          { optForce = 0, optVerb = 0, optAll = True
                           , optRemote = useserver, optRemoteURL = curryInfoURL
                           , optOutFormat = "CurryTerm"
                           , optPackage = pkg, optVersion = vsn

@@ -32,7 +32,7 @@ curryInfoURL = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
 --- The requests to be generated for package versions.
 packageVersionRequests :: [String]
 packageVersionRequests =
-  ["documentation", "categories", "dependencies", "modules"]
+  ["documentation", "categories", "dependencies", "modules", "exportedmodules"]
 
 --- The requests to be generated for modules.
 moduleRequests :: [String]
