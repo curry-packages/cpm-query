@@ -56,7 +56,7 @@ data Options = Options
 --- Default value for option `--maxtime` (will be increased if `--generate`
 --- is set).
 defaultMaxTime :: Int
-defaultMaxTime = 3
+defaultMaxTime = 30
 
 --- The default options of the query tool.
 defaultOptions :: Options
