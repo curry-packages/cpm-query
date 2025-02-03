@@ -2,11 +2,11 @@
 --- Configuration parameters of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version January 2025
+--- @version February 2025
 -------------------------------------------------------------------------
 
 module CPM.Query.Configuration
-  ( CurryEntity(..), defaultShowRequests, curryInfoURL
+  ( CurryEntity(..), defaultShowRequests, curryInfoURL, curryInfoCache
   , packageVersionRequests, moduleRequests
   , classRequests, typeRequests, operationRequests
   )
@@ -28,6 +28,11 @@ defaultShowRequests cent = case cent of
 --- The URL of the `curry-info` web service CGI script.
 curryInfoURL :: String
 curryInfoURL = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
+
+--- The cache directory passed to `curry-info` (if not null).
+curryInfoCache :: String
+curryInfoCache = ""
+--curryInfoCache = "$HOME/CURRYINFOCACHE"
 
 --- The requests to be generated for package versions.
 packageVersionRequests :: [String]

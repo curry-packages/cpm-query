@@ -14,11 +14,11 @@
 ---     > cpm-query System.Process exitWith
 ---     > cpm-query System.Directory doesFileExist
 ---
---- @version January 2025
+--- @version February 2025
 ------------------------------------------------------------------------
 
 module CPM.Query.Main
-  --( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
+  ( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
  where
 
 import Control.Monad      ( unless, when, replicateM )
@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 31/01/25)"
+  bannerText = "CPM Query Tool (Version of 03/02/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -253,12 +253,20 @@ curryInfoCmd opts ciopts =
     then ("curl",
           ["--max-time", show (optMaxTime opts), "--silent", "--show-error",
            optRemoteURL opts ++ "?" ++
-           intercalate "&" (addColorOption (map string2urlencoded ciopts))])
+           intercalate "&" (addOptions (map string2urlencoded ciopts))])
     else (curryInfoBin,
-          addColorOption ["--verbosity=" ++ show (optVerb opts)] ++ ciopts)
+          addOptions ["--verbosity=" ++ show (optVerb opts)] ++ ciopts)
  where
+  addOptions = addCacheOption . addColorOption
+
   -- Add the option `--color` to a list of `curry-info` options, if demanded.
   addColorOption ncopts = if optColor opts then "--color" : ncopts else ncopts
+
+  -- Add the option `--cache` to a list of `curry-info` options
+  -- if the `curryInfoCache` is not null.
+  addCacheOption ncopts
+    | null curryInfoCache = ncopts
+    | otherwise           = ("--cache=" ++ curryInfoCache) : ncopts
 
 -- Calls `curry-info` locally or in remote mode with the given parameters.
 -- In dry mode, show only the command.
