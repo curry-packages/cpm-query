@@ -8,7 +8,7 @@
 module CPM.Query.Configuration
   ( CurryEntity(..), defaultShowRequests, curryInfoURL, curryInfoCache
   , packageVersionRequests, moduleRequests
-  , classRequests, typeRequests, operationRequests
+  , classRequests, typeRequests, operationRequests, moduleOperationsRequests
   )
  where
 
@@ -19,8 +19,8 @@ data CurryEntity = Operation | Type | Class | Unknown
 --- The default requests to be shown for various kinds entities.
 defaultShowRequests :: CurryEntity -> [String]
 defaultShowRequests cent = case cent of
-  Operation  -> [ "documentation", "cass-deterministic", "cass-total"
-                , "cass-terminating", "cass-demand", "failfree" ]
+  Operation  -> [ "documentation", "deterministic", "totally-defined"
+                , "terminating", "demand", "failfree" ]
   Type       -> [ "documentation", "definition" ]
   Class      -> [ "documentation", "definition" ]
   Unknown    -> []
@@ -42,7 +42,7 @@ packageVersionRequests =
 --- The requests to be generated for modules.
 moduleRequests :: [String]
 moduleRequests =
-  [ "documentation", "sourcecode", "cass-unsafemodule"
+  [ "documentation", "sourcecode", "unsafe"
   , "classes", "types", "operations" ]
 
 --- The requests to be generated for classes.
@@ -56,7 +56,12 @@ typeRequests = ["documentation", "constructors", "definition"]
 --- The requests to be generated for operations.
 operationRequests :: [String]
 operationRequests =
-  [ "documentation", "definition", "signature", "infix", "precedence"
-  , "cass-demand", "cass-deterministic", "cass-indeterministic"
-  , "cass-solcomplete", "cass-terminating", "cass-total", "cass-values"
+  [ "documentation", "definition", "signature", "infix", "precedence" ] ++
+  moduleOperationsRequests
+
+--- Requests which analyze all operations of a module at once.
+moduleOperationsRequests :: [String]
+moduleOperationsRequests =
+  [ "demand", "deterministic", "indeterministic"
+  , "solution-complete", "terminating", "totally-defined", "result-values"
   , "failfree", "iotype" ]
