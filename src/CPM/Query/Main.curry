@@ -48,7 +48,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 18/02/25)"
+  bannerText = "CPM Query Tool (Version of 21/02/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -126,22 +126,34 @@ generateForModule opts pkg vsn mn = do
   if null optreqs
     then do
       infoAndCallCurry ciopts moduleRequests
-      infoAndCallCurry ciopts ("--allclasses" : classRequests)
-      infoAndCallCurry ciopts ("--alltypes"  : typeRequests)
-      mapM_ (genOpRequest ciopts) operationRequests
+      mapM_ (genClassRequest ciopts) classRequests
+      mapM_ (genTypeRequest  ciopts) typeRequests
+      mapM_ (genOpRequest    ciopts) operationRequests
     else case optEntity opts of
-      Class     -> infoAndCallCurry ciopts ("--allclasses" : optreqs)
-      Type      -> infoAndCallCurry ciopts ("--alltypes"   : optreqs)
-      Operation -> mapM_ (genOpRequest ciopts) optreqs
+      Class     -> mapM_ (genClassRequest ciopts) optreqs
+      Type      -> mapM_ (genTypeRequest  ciopts) optreqs
+      Operation -> mapM_ (genOpRequest    ciopts) optreqs
       Unknown   -> return ()
  where
-  genOpRequest ciopts req
-    -- for a `moduleOperationsRequest`, compute request only for dummy
-    -- operation since this sets the analysis results for all operations:
-    | req `elem` moduleOperationsRequests
-    = infoAndCallCurry ciopts ["--operation=", req]
+  genClassRequest ciopts req
+    -- for a `documentation` or `definition` request, compute it only for
+    -- a dummy entity since this sets the results for all entities
+    | req `elem` ["documentation", "definition"]
+    = infoAndCallCurry ciopts ["--class=", req]
     | otherwise
-    = infoAndCallCurry ciopts ["--alloperations", req]
+    = infoAndCallCurry ciopts ["--allclasses", req]
+    
+  genTypeRequest ciopts req
+    -- for a `documentation` or `definition` request, compute it only for
+    -- a dummy entity since this sets the results for all entities
+    | req `elem` ["documentation", "definition"]
+    = infoAndCallCurry ciopts ["--type=", req]
+    | otherwise
+    = infoAndCallCurry ciopts ["--alltypes", req]
+    
+  -- for operation requests, compute request only for dummy
+  -- operation since this sets the analysis results for all operations
+  genOpRequest ciopts req = infoAndCallCurry ciopts ["--operation=", req]
     
   infoAndCallCurry ciopts reqs = do
     genInfoMsg reqs

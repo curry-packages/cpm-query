@@ -8,7 +8,7 @@
 module CPM.Query.Configuration
   ( CurryEntity(..), defaultShowRequests, curryInfoURL, curryInfoCache
   , packageVersionRequests, moduleRequests
-  , classRequests, typeRequests, operationRequests, moduleOperationsRequests
+  , classRequests, typeRequests, operationRequests
   )
  where
 
@@ -47,21 +47,16 @@ moduleRequests =
 
 --- The requests to be generated for classes.
 classRequests :: [String]
-classRequests = ["documentation", "methods", "definition"]
+classRequests = ["documentation", "definition", "methods"]
 
 --- The requests to be generated for types.
 typeRequests :: [String]
-typeRequests = ["documentation", "constructors", "definition"]
+typeRequests = ["documentation", "definition", "constructors"]
 
 --- The requests to be generated for operations.
 operationRequests :: [String]
 operationRequests =
-  [ "documentation", "definition", "signature", "infix", "precedence" ] ++
-  moduleOperationsRequests
-
---- Requests which analyze all operations of a module at once.
-moduleOperationsRequests :: [String]
-moduleOperationsRequests =
-  [ "demand", "deterministic", "indeterministic"
+  [ "documentation", "definition", "signature", "infix", "precedence"
+  , "demand", "deterministic", "indeterministic"
   , "solution-complete", "terminating", "totally-defined", "result-values"
   , "failfree", "iotype" ]
