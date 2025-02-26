@@ -166,7 +166,7 @@ options =
            "generate analysis infos for a package version"
   , Option "" ["from"]
            (ReqArg (\f opts -> opts { optGenFrom = f }) "<f>")
-           "file with generate data"
+           "file with generate data (in CSV format)"
   , Option "" ["request"]
            (ReqArg (\r opts -> opts { optRequest = optRequest opts ++
                                                    splitOn "," r })

@@ -18,14 +18,14 @@
 ------------------------------------------------------------------------
 
 module CPM.Query.Main
-  ( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
+  --( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
  where
 
 import Control.Monad      ( unless, when, replicateM )
-import Data.List          ( intercalate, isPrefixOf, nub, union )
+import Data.List          ( intercalate, nubBy )
 import System.Environment ( getArgs )
 import System.IO          ( getContents, hFlush, stderr, hClose, hGetLine
-                          , hPutStrLn )
+                          , hPutStr, hPutStrLn )
 
 import FlatCurry.Types    ( QName )
 import Network.Socket     ( connectToSocket )
@@ -39,6 +39,7 @@ import System.FilePath    ( (</>), joinPath, splitDirectories, replaceDirectory 
 import System.IOExts      ( evalCmd, execCmd, readCompleteFile )
 import System.Path        ( fileInPath )
 import System.Process     ( exitWith, system )
+import Text.CSV           ( readCSV, showCSV )
 
 import CPM.Query.Configuration
 import CPM.Query.Options
@@ -48,7 +49,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 21/02/25)"
+  bannerText = "CPM Query Tool (Version of 26/02/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -70,17 +71,20 @@ main = do
        | not (null (optPackage opts))
             -> queryPackage opts
        | optGenerate opts && not (null genfile)
-            -> do ls <- if genfile == "-" then getContents else readFile genfile
-                  mapM_ (genFromLine opts) -- ignore comments starting with #
-                        (nub (filter (\l -> take 1 l /= "#") (lines ls)))
+            -> do table <- readCSV <$> if genfile == "-" then getContents
+                                                         else readFile genfile
+                  mapM_ (genFromFields opts) (nubBy eqPkgVrs table)
     _       -> do putStrLn $ "Illegal arguments: " ++ unwords args ++ "\n\n" ++
                              usageText
                   exitWith 1
  where
-  genFromLine opts l = case words l of
-    [p,v] -> generateForPackage opts p v
-    []    -> return () -- skip empty lines 
-    _     -> hPutStrLn stderr $ "Ignore illegal line in generate file: " ++ l
+  eqPkgVrs l1 l2 = case (l1,l2) of (p1:v1:_, p2:v2:_) -> p1==p2 && v1==v2
+                                   _                  -> False
+  genFromFields opts fs = case fs of
+    (p:v:_) | isPackageName p -> generateForPackage opts p v
+    []      -> return () -- skip empty lines 
+    _       -> hPutStr stderr $
+                 "*** Ignore illegal line in generate file: " ++ showCSV [fs]
 
   checkExecutable = do
     hascurryinfo <- fileInPath "curry-info"
@@ -92,6 +96,12 @@ main = do
         "> cd curry-info-system\n" ++
         "> cypm install\n"
       exitWith 1
+
+-- Is the string a valid package name?
+isPackageName :: String -> Bool
+isPackageName []     = False
+isPackageName (c:cs) = isAlphaNum c &&
+                       all (\d -> isAlphaNum d || d == '-' || d == '_') cs
 
 ------------------------------------------------------------------------------
 -- Generate analysis information for a given package and version.
