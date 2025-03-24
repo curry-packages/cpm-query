@@ -107,7 +107,7 @@ information when hovering over an entity defined in some module
 of an existing Curry package.
 The image below shows a screenshot when hovering over `length`.
 
-![Analysis infos for length](images/cpm-query-length.png)
+![Analysis infos for length](https://cpm.curry-lang.org/PACKAGES/cpm-query-0.1.0/images/cpm-query-length.png)
 
 In order to activate this possibility, one has to configure
 the Curry Language Server inside Visual Studio Code as follows.
