@@ -3,14 +3,14 @@
 --- that is stored in `$HOME/.cpmqueryrc`
 ---
 --- @author  Michael Hanus
---- @version January 2025
+--- @version March 2025
 ------------------------------------------------------------------------------
 
 module CPM.Query.RCFile
   ( readRC, rcValue )
  where
 
-import Control.Monad     ( unless )
+import Control.Monad     ( unless, when )
 import Data.Char         ( toLower )
 import Data.Either       ( rights )
 import Data.List         ( intercalate, sort )
@@ -18,7 +18,8 @@ import System.IO         ( hPutStrLn, stderr )
 
 import Data.PropertyFile ( readPropertyFile, updatePropertyFile )
 import System.FilePath   ( FilePath, (</>), (<.>) )
-import System.Directory  ( doesFileExist, getHomeDirectory, renameFile )
+import System.Directory  ( doesDirectoryExist, doesFileExist, getHomeDirectory
+                         , renameFile )
 
 import CPM.Query.Configuration
 
@@ -66,12 +67,15 @@ readRC :: IO [(String, String)]
 readRC = do
   rcname <- rcFileName
   rcexists  <- doesFileExist rcname
-  catch (if rcexists
-           then updateRC
-           else do hPutStrLn stderr $ "Installing '" ++ rcname ++ "'..."
-                   writeFile rcname defaultRC)
+  catch (if rcexists then updateRC else installRC rcname)
         (const $ return ())
   readPropertyFile rcname
+ where
+  installRC rcname = do
+    exhomedir <- getHomeDirectory >>= doesDirectoryExist
+    when exhomedir $ do
+      hPutStrLn stderr $ "Installing '" ++ rcname ++ "'..."
+      writeFile rcname defaultRC
 
 --- Reads the rc file (which must be present) and compares the definitions
 --- with the distribution rc file. If the set of variables is different,

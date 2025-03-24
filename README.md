@@ -46,8 +46,12 @@ in the current load path of Curry
 with `cypm exec` since the load path is automatically computed by this tool).
 For instance, try (inside this package)
 
+    > cpm-query Prelude foldr1
     > cpm-query Data.List split
     > cpm-query --class Prelude Ord
+
+or, inside this package,
+
     > cpm-query System.Process exitWith
     > cpm-query System.Directory doesFileExist
 
@@ -69,10 +73,70 @@ signature of all operations defined in module `Data.Maybe`:
     > cpm-query --all --request=documentation,signature Data.Maybe
 
 One can also omit the module name to request information about a specific
-version of a package. For instance, the list of module of package
+version of a package. For instance, the list of modules of package
 `base` with version `3.3.0` can be queried by
 
     > cpm-query -p base -x 3.3.0 --request=modules
+
+
+Configuration
+-------------
+
+As shown above, one can influence the behavior of `cpm-query` by setting
+various options. Another configuration method is to place definitions
+in the file `$HOME/.cpmqueryrc`. This file is generated when `cpm-query`
+is called for the first time. If one is not happy with the default
+requests shown by `cpm-query`, one can define in this file other
+requests for classes, types, and operations.
+This is useful when `cpm-query` is automatically invoked,
+as in the REPL command `:info` of
+[PAKCS](https://www.curry-lang.org/pakcs/) (version 3.8.0 or higher)
+or in the
+[Curry Language Server](https://github.com/fwcd/curry-language-server)
+(see below).
+
+
+Usage in the Curry Language Server
+----------------------------------
+
+The [Curry Language Server](https://github.com/fwcd/curry-language-server)
+supports an extension for invoking programs when hovering over
+particular program entities, like operations or types.
+If one uses `cpm-query`, one can see analysis and verification
+information when hovering over an entity defined in some module
+of an existing Curry package.
+The image below shows a screenshot when hovering over `length`.
+
+![Analysis infos for length](images/cpm-query-length.png)
+
+In order to activate this possibility, one has to configure
+the Curry Language Server inside Visual Studio Code as follows.
+
+1. Select `File > Preferences > Settings`
+2. Go to `Extensions > Curry > Language Server: Extensions` and
+   select `Edit in settings.json`
+3. Add the entry (or adapt it according to your preferences)
+
+        "curry.languageServer.extensions": [
+            {
+                "name": "Analysis Infos",
+                "extensionPoint": "hover",
+                "executable": "cpm-query",
+                "args": [
+                    "--quiet", "--maxtime=3",
+                    "--clskind={symbolKind}",
+                    "{module}",
+                    "{identifier}"
+                ]
+            }
+        ]
+
+Note that the executable `cpm-query` must be accessible in your path.
+When you now hover over some operation imported from some
+existing Curry package maintained by
+[CPM](https://www.curry-lang.org/tools/cpm/),
+the executable `cpm-query` is invoked to show the analysis
+information about this operation in a pop-up window.
 
 
 Generating analysis information
@@ -80,6 +144,9 @@ Generating analysis information
 
 `cpm-query` can also be used to generate analysis information
 with `curry-info` in order to fill the data repository of CurryInfo.
+This is only relevant if you want to maintain a local version
+of CurryInfo.
+
 For instance, the generation of analysis information
 for all modules in package `base` in version `3.3.0` can be done by
 

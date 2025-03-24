@@ -14,11 +14,11 @@
 ---     > cpm-query System.Process exitWith
 ---     > cpm-query System.Directory doesFileExist
 ---
---- @version February 2025
+--- @version March 2025
 ------------------------------------------------------------------------
 
 module CPM.Query.Main
-  --( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
+  ( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
  where
 
 import Control.Monad      ( unless, when, replicateM )
@@ -49,7 +49,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 26/02/25)"
+  bannerText = "CPM Query Tool (Version of 24/03/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
