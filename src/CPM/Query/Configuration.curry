@@ -2,12 +2,12 @@
 --- Configuration parameters of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version February 2025
+--- @version March 2025
 -------------------------------------------------------------------------
 
 module CPM.Query.Configuration
   ( CurryEntity(..), defaultShowRequests, curryInfoURL, curryInfoCache
-  , packageVersionRequests, moduleRequests
+  , packageRequests, packageVersionRequests, moduleRequests
   , classRequests, typeRequests, operationRequests
   )
  where
@@ -34,29 +34,34 @@ curryInfoCache :: String
 curryInfoCache = ""
 --curryInfoCache = "$HOME/CURRYINFOCACHE"
 
+--- The requests to be generated for packages.
+packageRequests :: [String]
+packageRequests = [ "name", "versions" ]
+
 --- The requests to be generated for package versions.
 packageVersionRequests :: [String]
 packageVersionRequests =
-  ["documentation", "categories", "dependencies", "modules", "exportedmodules"]
+  [ "version", "documentation", "categories", "dependencies"
+  , "modules", "exportedmodules" ]
 
 --- The requests to be generated for modules.
 moduleRequests :: [String]
 moduleRequests =
-  [ "documentation", "sourcecode", "unsafe"
+  [ "name", "documentation", "sourcecode", "unsafe"
   , "classes", "types", "operations" ]
 
 --- The requests to be generated for classes.
 classRequests :: [String]
-classRequests = ["documentation", "definition", "methods"]
+classRequests = ["name", "documentation", "definition", "methods"]
 
 --- The requests to be generated for types.
 typeRequests :: [String]
-typeRequests = ["documentation", "definition", "constructors"]
+typeRequests = ["name", "documentation", "definition", "constructors"]
 
 --- The requests to be generated for operations.
 operationRequests :: [String]
 operationRequests =
-  [ "documentation", "definition", "signature", "infix", "precedence"
+  [ "name", "documentation", "definition", "signature", "infix", "precedence"
   , "demand", "deterministic", "indeterministic"
   , "solution-complete", "terminating", "totally-defined", "result-values"
   , "failfree", "iotype" ]

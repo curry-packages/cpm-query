@@ -49,7 +49,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 24/03/25)"
+  bannerText = "CPM Query Tool (Version of 26/03/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -121,7 +121,7 @@ generateForPackage opts pkg vsn = do
     when (optRemote opts) $ do  -- update repo index in remote mode:
       printWhenStatus opts "Update package repository index..."
       callCurryInfo opts [ "--update" ]
-    callCurryInfo opts [ "--force=2", "--package=" ++ pkg, "versions" ]
+    callCurryInfo opts (("--package=" ++ pkg) : "--force=2" : packageRequests )
     callCurryInfo opts (pkgvsnopts ++ "--force=2" : packageVersionRequests)
   mods <- getPackageModules opts pkg vsn
   mapM_ (generateForModule opts pkg vsn) mods
@@ -161,9 +161,14 @@ generateForModule opts pkg vsn mn = do
     | otherwise
     = infoAndCallCurry ciopts ["--alltypes", req]
     
-  -- for operation requests, compute request only for dummy
-  -- operation since this sets the analysis results for all operations
-  genOpRequest ciopts req = infoAndCallCurry ciopts ["--operation=", req]
+  genOpRequest ciopts req
+    -- for operation requests (different from `name`), compute requests only
+    -- for a dummy operation since this sets the analysis results
+    -- for all operations
+    | req `notElem` ["name"]
+    = infoAndCallCurry ciopts ["--operation=", req]
+    | otherwise
+    = infoAndCallCurry ciopts ["--alloperations", req]
     
   infoAndCallCurry ciopts reqs = do
     genInfoMsg reqs
