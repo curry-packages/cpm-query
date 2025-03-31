@@ -97,12 +97,6 @@ main = do
         "> cypm install\n"
       exitWith 1
 
--- Is the string a valid package name?
-isPackageName :: String -> Bool
-isPackageName []     = False
-isPackageName (c:cs) = isAlphaNum c &&
-                       all (\d -> isAlphaNum d || d == '-' || d == '_') cs
-
 ------------------------------------------------------------------------------
 -- Generate analysis information for a given package and version.
 -- In remote mode, the package repository index is also updated.
@@ -317,6 +311,11 @@ callCurryInfo opts ciopts = do
 ---
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
+---
+--- Example: get the demanded arguments of all operation in module `Data.List`:
+---
+---     > askCurryInfoServer "Data.List" Operation "demand"
+---
 askCurryInfoServer :: String -> CurryEntity -> String
                    -> IO (Maybe [(QName, String)])
 askCurryInfoServer modname entkind req
@@ -383,16 +382,21 @@ askCurryInfoServer modname entkind req
 --- of the given request (third argument) for all entities in the module
 --- provided as the third argument. The requested result is returned in its
 --- string representation for each entity in the module.
---- If the first argument is `True`, the `curry-info` server is queried.
+--- If the first argument is `True`, the `curry-info` web service is queried.
 --- The second is the verbosity (where 0 means quiet).
 --- The fourth argument is the kind of entity to be queried.
 --- If it is `Unknown`, `Nothing` is returned.
 --- 
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
+---
+--- Example: get the demanded arguments of all operations in module `Data.List`:
+---
+---     > askCurryInfoCmd True 1 "Data.List" Operation "demand"
+---
 askCurryInfoCmd :: Bool -> Int -> String -> CurryEntity -> String
                 -> IO (Maybe [(QName, String)])
-askCurryInfoCmd useserver verb modname entkind req
+askCurryInfoCmd remote verb modname entkind req
   | entkind == Unknown = return Nothing
   | otherwise = do
     mres <- getPackageVersionOfModule modname
@@ -405,7 +409,7 @@ askCurryInfoCmd useserver verb modname entkind req
         -- will be filled in the `evalCmd` call so that it might overflow.
         let queryopts = defaultOptions
                           { optForce = 0, optVerb = 0, optAll = True
-                          , optRemote = useserver, optRemoteURL = curryInfoURL
+                          , optRemote = remote, optRemoteURL = curryInfoURL
                           , optOutFormat = "CurryTerm"
                           , optPackage = pkg, optVersion = vsn
                           , optModule = modname
@@ -522,6 +526,12 @@ getPackageModuleOps opts pkg vsn = do
 
 ----------------------------------------------------------------------------
 -- Auxiliaries:
+
+-- Is the string a valid package name?
+isPackageName :: String -> Bool
+isPackageName []     = False
+isPackageName (c:cs) = isAlphaNum c &&
+                       all (\d -> isAlphaNum d || d == '-' || d == '_') cs
 
 --- The binary name of the curry-info tool.
 curryInfoBin :: String
