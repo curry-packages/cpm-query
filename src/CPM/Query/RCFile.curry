@@ -3,7 +3,7 @@
 --- that is stored in `$HOME/.cpmqueryrc`
 ---
 --- @author  Michael Hanus
---- @version March 2025
+--- @version April 2025
 ------------------------------------------------------------------------------
 
 module CPM.Query.RCFile
@@ -47,7 +47,7 @@ defaultRCProps =
   , Right ("remote", "yes")
   , Left ""
   , Left "# URL of the web service of curry-info (used when remote=yes):"
-  , Left "# (if empty: use default URL)"
+  , Left $ "# (if empty: use '" ++ curryInfoURL ++ "')"
   , Right ("curryinfourl", "")
   , Left ""
   ]
