@@ -21,7 +21,7 @@ module CPM.Query.Main
   ( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
  where
 
-import Control.Monad      ( unless, when, replicateM )
+import Control.Monad      ( unless, when, replicateM, void )
 import Data.List          ( intercalate, nubBy )
 import System.Environment ( getArgs )
 import System.IO          ( getContents, hFlush, stderr, hClose, hGetLine
@@ -29,6 +29,7 @@ import System.IO          ( getContents, hFlush, stderr, hClose, hGetLine
 
 import FlatCurry.Types    ( QName )
 import Network.Socket     ( connectToSocket )
+import Network.URL        ( params2urlencoded, string2urlencoded )
 import System.CurryPath   ( lookupModuleSourceInLoadPath
                           , getPackageVersionOfDirectory
                           , getPackageVersionOfModule, setCurryPathIfNecessary
@@ -49,7 +50,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 01/04/25)"
+  bannerText = "CPM Query Tool (Version of 02/04/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -107,16 +108,18 @@ generateForPackage opts pkg vsn = do
     "Generating infos for package '" ++ pkgid ++ "' for " ++
     show (optEntity opts) ++ " entities..."
   when (optEntity opts == Unknown) $ exitWith 0
-  let pkgvsnopts = [ "--package=" ++ pkg, "--version=" ++ vsn ]
+  let pkgvsnopts = [ ("--package", pkg), ("--version", vsn) ]
   when (null (optRequest opts)) $ do
     printWhenStatus opts $
       "Cleaning old information of package '" ++ pkgid ++ "'..."
-    callCurryInfo opts (pkgvsnopts ++ ["--clean"])
+    callCurryInfo opts (pkgvsnopts ++ [("--clean","")])
     when (optRemote opts) $ do  -- update repo index in remote mode:
       printWhenStatus opts "Update package repository index..."
-      callCurryInfo opts [ "--update" ]
-    callCurryInfo opts (("--package=" ++ pkg) : "--force=2" : packageRequests )
-    callCurryInfo opts (pkgvsnopts ++ "--force=2" : packageVersionRequests)
+      callCurryInfo opts [ ("--update","") ]
+    callCurryInfo opts
+      (("--package", pkg) : ("--force","2") : map (\r->(r,"")) packageRequests)
+    callCurryInfo opts
+      (pkgvsnopts ++ ("--force","2") : map (\r->(r,"")) packageVersionRequests)
   mods <- getPackageModules opts pkg vsn
   mapM_ (generateForModule opts pkg vsn) mods
 
@@ -124,8 +127,8 @@ generateForPackage opts pkg vsn = do
 generateForModule :: Options -> String -> String -> String -> IO ()
 generateForModule opts pkg vsn mn = do
   genInfoMsg []
-  let ciopts = [ "--force=2", "--package=" ++ pkg, "--version=" ++ vsn
-               , "--module="  ++ mn ]
+  let ciopts = [ ("--force","2"), ("--package", pkg), ("--version", vsn)
+               , ("--module", mn) ]
   let optreqs = optRequest opts
   if null optreqs
     then do
@@ -166,7 +169,7 @@ generateForModule opts pkg vsn mn = do
     
   infoAndCallCurry ciopts reqs = do
     genInfoMsg reqs
-    callCurryInfo opts $ ciopts ++ reqs
+    callCurryInfo opts $ ciopts ++ map (\r->(r,"")) reqs
 
   genInfoMsg req = printWhenStatus opts $
     "Generating infos for '" ++ mn ++
@@ -238,58 +241,59 @@ queryPackage opts0 = do
   callCurryInfo opts (curryInfoOptions opts)
 
 -- Generate curry-info options from cpm-query options.
-curryInfoOptions :: Options -> [String]
+curryInfoOptions :: Options -> [(String,String)]
 curryInfoOptions opts =
-  [ "--format=" ++ optOutFormat opts
-  , if optShowAll opts then "-f0" else "-f" ++ show (optForce opts) ] ++
-  (if optShowAll opts then ["--showall"] else []) ++
-  (if null (optPackage opts) then [] else ["--package=" ++ optPackage opts]) ++
-  (if null (optVersion opts) then [] else ["--version=" ++ optVersion opts]) ++
-  (if null (optModule  opts) then [] else ["--module="  ++ optModule opts]) ++
+  [ ("--format", optOutFormat opts)
+  , ("--force", if optShowAll opts then "0" else show (optForce opts)) ] ++
+  (if optShowAll opts then [("--showall","")] else []) ++
+  (if null (optPackage opts) then [] else [("--package", optPackage opts)]) ++
+  (if null (optVersion opts) then [] else [("--version", optVersion opts)]) ++
+  (if null (optModule  opts) then [] else [("--module",  optModule opts)]) ++
   (if optAll opts then allEntOpt
                   else if null ename then [] else entityOpt) ++
-  optRequest opts
+  map (\r -> (r,"")) (optRequest opts)
  where
   ename = optEName opts
   allEntOpt = case optEntity opts of
-                Operation     -> [ "--alloperations" ]
-                Type          -> [ "--alltypes"      ]
-                Class         -> [ "--allclasses"    ]
+                Operation     -> [ ("--alloperations","") ]
+                Type          -> [ ("--alltypes","")      ]
+                Class         -> [ ("--allclasses","")    ]
                 Unknown       -> []
   entityOpt = case optEntity opts of
-                Operation     -> [ "--operation=" ++ ename ]
-                Type          -> [ "--type="      ++ ename ]
-                Class         -> [ "--class="     ++ ename ]
+                Operation     -> [ ("--operation", ename) ]
+                Type          -> [ ("--type",      ename) ]
+                Class         -> [ ("--class",     ename) ]
                 Unknown       -> []
 
 -- The command and parameters to invoke `curry-info` depending on the
 -- options passed as the first parameter.
 -- The verbosity and color options are set according to these options.
 -- The second parameters are the actual options for the `curry-info` command.
-curryInfoCmd :: Options -> [String] -> (String, [String])
+curryInfoCmd :: Options -> [(String,String)] -> (String, [String])
 curryInfoCmd opts ciopts =
   if optRemote opts
     then ("curl",
           ["--max-time", show (optMaxTime opts), "--silent", "--show-error",
-           optRemoteURL opts ++ "?" ++
-           intercalate "&" (addOptions (map string2urlencoded ciopts))])
+           optRemoteURL opts ++ "?" ++ params2urlencoded (addOptions ciopts)])
     else (curryInfoBin,
-          addOptions ["--verbosity=" ++ show (optVerb opts)] ++ ciopts)
+          map (\(o,v) -> if null v then o else o ++ '=' : v)
+              (addOptions (("--verbosity", show (optVerb opts)) : ciopts)))
  where
   addOptions = addCacheOption . addColorOption
 
   -- Add the option `--color` to a list of `curry-info` options, if demanded.
-  addColorOption ncopts = if optColor opts then "--color" : ncopts else ncopts
+  addColorOption ncopts =
+    if optColor opts then ("--color","") : ncopts else ncopts
 
   -- Add the option `--cache` to a list of `curry-info` options
   -- if the `curryInfoCache` is not null.
   addCacheOption ncopts
     | null curryInfoCache = ncopts
-    | otherwise           = ("--cache=" ++ curryInfoCache) : ncopts
+    | otherwise           = ("--cache", curryInfoCache) : ncopts
 
 -- Calls `curry-info` locally or in remote mode with the given parameters.
 -- In dry mode, show only the command.
-callCurryInfo :: Options -> [String] -> IO ()
+callCurryInfo :: Options -> [(String,String)] -> IO ()
 callCurryInfo opts ciopts = do
   let (cmdbin,cmdopts) = curryInfoCmd opts ciopts
       cmd = unwords $ cmdbin : map escapeShellString cmdopts
@@ -472,8 +476,8 @@ queryCurryInfo especs req = do
 queryCurryInfoWithOptions :: Read a => Options -> [(String,String)] -> String
                           -> IO a
 queryCurryInfoWithOptions opts especs req = do
-  let ciopts = [ "-v" ++ show (optVerb opts), "--format=CurryTerm" ] ++
-               map (\(t,v) -> t ++ "=" ++ v) especs ++ [req]
+  let ciopts = [("--verbosity",show (optVerb opts)), ("--format","CurryTerm")]
+               ++ especs ++ [(req,"")]
       (cmd,cmdopts) = curryInfoCmd opts ciopts
   printWhenAll opts $ unwords $ ["Executing:", cmd] ++ cmdopts
   (ec,sout,serr) <- evalCmd cmd cmdopts ""
@@ -553,21 +557,6 @@ fromQName = fromQN ""
   isModuleID :: String -> Bool
   isModuleID []     = False
   isModuleID (x:xs) = isAlpha x && all (\c -> isAlphaNum c || c `elem` "'_") xs
-
--- Translates arbitrary strings into equivalent URL encoded strings.
-string2urlencoded :: String -> String
-string2urlencoded [] = []
-string2urlencoded (c:cs)
-  | noEncode c = c : string2urlencoded cs
-  | c == ' '   = '+' : string2urlencoded cs
-  | otherwise
-  = let oc = ord c
-    in '%' : int2hex(oc `div` 16) : int2hex(oc `mod` 16) : string2urlencoded cs
- where
-  noEncode x = isAlphaNum x || x `elem` "=-"
-
-  int2hex i = if i<10 then chr (ord '0' + i)
-                      else chr (ord 'A' + i - 10)
 
 -- Escape a string to use it as a parameter in a shell command.
 escapeShellString :: String -> String
