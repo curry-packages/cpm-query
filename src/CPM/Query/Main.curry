@@ -50,7 +50,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 02/04/25)"
+  bannerText = "CPM Query Tool (Version of 13/04/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()

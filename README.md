@@ -13,7 +13,7 @@ about Curry modules contained in Curry packages maintained by the
 [Curry Package Manager](https://curry-lang.org/tools/cpm/).
 
 In the default mode, a
-[web service of CurryInfo](https://cpm.curry-lang.org/webapps/curry-info/run.cgi?-V)
+[web service of CurryInfo](https://cpm.curry-lang.org/curry-info/run.cgi?-V)
 is used to request information about Curry entities.
 If the web service is not available, one can also use a local installation
 of CurryInfo. In this case, the executable `curry-info` must be installed

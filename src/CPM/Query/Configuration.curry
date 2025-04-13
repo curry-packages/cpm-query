@@ -2,7 +2,7 @@
 --- Configuration parameters of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version March 2025
+--- @version April 2025
 -------------------------------------------------------------------------
 
 module CPM.Query.Configuration
@@ -27,7 +27,7 @@ defaultShowRequests cent = case cent of
 
 --- The URL of the `curry-info` web service CGI script.
 curryInfoURL :: String
-curryInfoURL = "https://cpm.curry-lang.org/webapps/curry-info/run.cgi"
+curryInfoURL = "https://cpm.curry-lang.org/curry-info/run.cgi"
 
 --- The cache directory passed to `curry-info` (if not null).
 curryInfoCache :: String
