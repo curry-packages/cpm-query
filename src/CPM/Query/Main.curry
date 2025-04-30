@@ -50,7 +50,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 13/04/25)"
+  bannerText = "CPM Query Tool (Version of 30/04/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -383,24 +383,26 @@ askCurryInfoServer modname entkind req
 
 ------------------------------------------------------------------------------
 --- This action uses the `curry-info` command to return the result
---- of the given request (third argument) for all entities in the module
+--- of the given request (fifth argument) for all entities in the module
 --- provided as the third argument. The requested result is returned in its
---- string representation for each entity in the module.
+--- string representation.
 --- If the first argument is `True`, the `curry-info` web service is queried.
 --- The second is the verbosity (where 0 means quiet).
---- The fourth argument is the kind of entity to be queried.
+--- The third argument is the kind of entity to be queried.
 --- If it is `Unknown`, `Nothing` is returned.
+--- The sixth argument specifies the output format, e.g.,
+--- "Text", "JSON", or "CurryTerm".
 --- 
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
 ---
 --- Example: get the demanded arguments of all operations in module `Data.List`:
 ---
----     > askCurryInfoCmd True 1 "Data.List" Operation "demand"
+---     > askCurryInfoCmd True 1 "Data.Maybe" Operation "demand" "JSON"
 ---
-askCurryInfoCmd :: Bool -> Int -> String -> CurryEntity -> String
-                -> IO (Maybe [(QName, String)])
-askCurryInfoCmd remote verb modname entkind req
+askCurryInfoCmd :: Bool -> Int -> String -> CurryEntity -> String -> String
+                -> IO (Maybe String)
+askCurryInfoCmd remote verb modname entkind req outformat
   | entkind == Unknown = return Nothing
   | otherwise = do
     mres <- getPackageVersionOfModule modname
@@ -414,7 +416,7 @@ askCurryInfoCmd remote verb modname entkind req
         let queryopts = defaultOptions
                           { optForce = 0, optVerb = 0, optAll = True
                           , optRemote = remote, optRemoteURL = curryInfoURL
-                          , optOutFormat = "CurryTerm"
+                          , optOutFormat = outformat
                           , optPackage = pkg, optVersion = vsn
                           , optModule = modname
                           , optRequest = [req] }
@@ -429,30 +431,13 @@ askCurryInfoCmd remote verb modname entkind req
                     unless (null err) $ hPutStrLn stderr err
                     hPutStrLn stderr line
                   return Nothing
-          else do
-            let mbres = do results <- (safeRead out :: Maybe [(String, String)])
-                           mapM readResult results
-            maybe (readError out) (return . Just) mbres
+          else return $ Just $
+                 (if outformat == "CurryTerm" then stripCR else id) out
  where
   line = take 70 (repeat '-') ++ "\n"
 
-  readError s = do
-    when (verb > 0) $ hPutStrLn stderr $
-      line ++ "Error reading output:\n" ++ s ++ line
-    return Nothing
-                
-  readResult :: (String, String) -> Maybe (QName, String)
-  readResult (obj, res) = do
-    (m, o) <- (safeRead obj :: Maybe (String, String))
-    [(_, result)] <- (safeRead res :: Maybe [(String, String)])
-    return ((m, o), result)
+  stripCR = reverse . dropWhile (=='\n') . reverse . dropWhile (=='\n')
 
--- This operation tries to read a value from a string and returns Nothing
--- in case of a read failure.
-safeRead :: Read a => String -> Maybe a
-safeRead s = case reads s of
-    [(x, bs)] | all isSpace bs -> Just x
-    _                          -> Nothing
 
 ----------------------------------------------------------------------------
 --- Query `curry-info` with some request where the options are taken
