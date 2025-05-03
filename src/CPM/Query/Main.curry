@@ -14,11 +14,12 @@
 ---     > cpm-query System.Process exitWith
 ---     > cpm-query System.Directory doesFileExist
 ---
---- @version April 2025
+--- @version May 2025
 ------------------------------------------------------------------------
 
 module CPM.Query.Main
-  ( main, askCurryInfoServer, askCurryInfoCmd, getPackageModules )
+  ( main, askCurryInfoServer, askCurryInfoCmd
+  , getPackageModules, getPackageModuleOps )
  where
 
 import Control.Monad      ( unless, when, replicateM, void )
@@ -50,7 +51,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 30/04/25)"
+  bannerText = "CPM Query Tool (Version of 03/05/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -391,7 +392,7 @@ askCurryInfoServer modname entkind req
 --- The third argument is the kind of entity to be queried.
 --- If it is `Unknown`, `Nothing` is returned.
 --- The sixth argument specifies the output format, e.g.,
---- "Text", "JSON", or "CurryTerm".
+--- "Text", "JSON", "CurryTerm", or "CurryMap".
 --- 
 --- The package and version are determined using the Curry loadpath.
 --- If something goes wrong, Nothing is returned.
@@ -431,19 +432,15 @@ askCurryInfoCmd remote verb modname entkind req outformat
                     unless (null err) $ hPutStrLn stderr err
                     hPutStrLn stderr line
                   return Nothing
-          else return $ Just $
-                 (if outformat == "CurryTerm" then stripCR else id) out
+          else return $ Just out
  where
   line = take 70 (repeat '-') ++ "\n"
-
-  stripCR = reverse . dropWhile (=='\n') . reverse . dropWhile (=='\n')
-
 
 ----------------------------------------------------------------------------
 --- Query `curry-info` with some request where the options are taken
 --- from the RC file.
 --- The first argument are the `curry-info` arguments to specify the entity
---- (e.g., package/version/module/option).
+--- (e.g., package/version/module/operation).
 --- The second argument is the (single!) request.
 --- The result must be readable so that it it is returned as data.
 --- In case of a parse error, the program is terminated with an error code.
@@ -472,20 +469,17 @@ queryCurryInfoWithOptions opts especs req = do
   -- Now we parse the output of curry-info:
   -- curry-info returns a list of strings pairs (package string, info string):
   resterm <- case reads sout of
-               [(ms,_)] -> return (ms :: [(String,String)])
+               [(ms,_)] -> return (ms :: [(String,[(String,String)])])
                _ -> reportError $ "Parse error for: " ++ sout
   -- the info string is a pair of requests and results as strings:
   case resterm of
     [] -> reportError "NO INFORMATION FOUND!"
-    ((_,infos):_) -> do
-      infolist <- case reads infos of
-                    [(ms,_)] -> return (ms :: [(String,String)])
-                    _ -> reportError ("Parse error for: " ++ infos)
-      -- finally, the (first) result string is a list of module names:
-      let infostring = snd (head infolist)
+    ((_,(_,infostring):_):_) -> do
+      -- since we had only a single request, we read (first) result string:
       case reads infostring of
         [(ms,_)] -> return ms
         _        -> reportError ("Parse error for: " ++ infostring)
+    _  -> reportError $ "UNEXPECTED RESULT: " ++ sout
  where
   reportError s = putStrLn s >> exitWith 1
 
@@ -497,8 +491,8 @@ getPackageModules :: Options -> String -> String -> IO [String]
 getPackageModules opts pkg vsn = do
   printWhenStatus opts $
     "Get modules of package '" ++ pkg ++ "-" ++ vsn ++ "'..."
-  queryCurryInfoWithOptions opts { optVerb = 0 }
-    [("--package",pkg), ("--version",vsn)] "modules"
+  queryCurryInfoWithOptions opts --{ optVerb = 0 }
+    [("--force","0"), ("--package",pkg), ("--version",vsn)] "modules"
 
 --- Get the number of operations of all modules of a package version.
 --- In case of a parse error, the program is terminated with an error state.
@@ -507,7 +501,8 @@ getPackageModuleOps opts pkg vsn = do
   let qopts = opts { optVerb = 0 }
   mods <- getPackageModules opts pkg vsn
   mops <- mapM (\m -> (queryCurryInfoWithOptions qopts
-                         [("--package",pkg), ("--version",vsn), ("--module",m)]
+                         [ ("--force","0"), ("--package",pkg), ("--version",vsn)
+                         , ("--module",m)]
                          "operations"))
                mods
   return (zip mods (map length (mops :: [[String]])))

@@ -174,7 +174,7 @@ options =
            "specific request (e.g., definition)\n(separate multiple requests by comma)"
   , Option "" ["format"]
            (ReqArg checkFormat "<f>")
-           "output format: Text (default), JSON, CurryTerm"
+           "output format:\nText (default), JSON, CurryTerm, CurryMap"
   , Option "" ["showall"]
            (NoArg (\opts -> opts { optShowAll = True }))
            "show all available information (no generation)"
@@ -214,7 +214,7 @@ options =
       _   -> error "Output format ambiguous (try `-h' for help)"
 
 outputFormats :: [String]
-outputFormats = ["Text", "JSON", "CurryTerm"]
+outputFormats = ["Text", "JSON", "CurryTerm", "CurryMap"]
 
 -------------------------------------------------------------------------
 
