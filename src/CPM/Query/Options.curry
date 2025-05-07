@@ -2,7 +2,7 @@
 --- The options of the CPM querying tool.
 ---
 --- @author Michael Hanus
---- @version January 2025
+--- @version May 2025
 -------------------------------------------------------------------------
 
 module CPM.Query.Options
@@ -37,6 +37,7 @@ data Options = Options
   , optCLS       :: String      -- entity kind passed by Curry language server
   , optAll       :: Bool        -- show information for all entities in a module
   , optColor     :: Bool        -- use colors in text output?
+  , optMarkdown  :: Bool        -- use markdown syntax in text output?
   , optDryRun    :: Bool        -- dry run, i.e., do not invoke curry-info?
   , optForce     :: Int         -- force computation of analysis information?
                                 -- (0: no gen., 1: only if missing, 2: always)
@@ -61,7 +62,7 @@ defaultMaxTime = 30
 --- The default options of the query tool.
 defaultOptions :: Options
 defaultOptions =
-  Options 1 False "" "" "" "" Operation "" False False False 0 False ""
+  Options 1 False "" "" "" "" Operation "" False False False False 0 False ""
           [] [] [] [] "Text" False True "" defaultMaxTime
 
 --- The default options with values from the RC file taken into account.
@@ -155,6 +156,9 @@ options =
   , Option "" ["nocolor"]
            (NoArg (\opts -> opts { optColor = False }))
            "do not use colors in text output"
+  , Option "" ["markdown"]
+           (NoArg (\opts -> opts { optMarkdown = True }))
+           "use markdown syntax in text output"
   , Option "d" ["dry"]
            (NoArg (\opts -> opts { optDryRun = True }))
            "dry run, i.e., do not run `curry-info` analyses"

@@ -132,8 +132,27 @@ the Curry Language Server inside Visual Studio Code as follows.
                 ]
             }
         ]
+4. To have a prettier formatting of the analysis infos (as shown
+   in the screenshot above), one can use CurryInfo's markdown formatting
+   by using the following slightly extended entry:
+   
+        "curry.languageServer.extensions": [
+            {
+                "name": "Analysis Infos",
+                "extensionPoint": "hover",
+                "outputFormat": "markdown",
+                "executable": "cpm-query",
+                "args": [
+                    "--maxtime=3", "--markdown",
+                    "--clskind={symbolKind}",
+                    "{module}",
+                    "{identifier}"
+                ]
+            }
+        ]
 
-Note that the executable `cpm-query` must be accessible in your path.
+Note that the executable `cpm-query` must be accessible in your path (otherwise you can specify the
+absolute path name of the executable `cpm-query`).
 When you now hover over some operation imported from some
 existing Curry package maintained by
 [CPM](https://www.curry-lang.org/tools/cpm/),

@@ -51,7 +51,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 03/05/25)"
+  bannerText = "CPM Query Tool (Version of 07/05/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -194,10 +194,11 @@ queryModuleEntity opts0 mname ename = do
                               , "Module name    : " ++ mname
                               , "Entity name    : " ++ ename ]
                  else (if null ename
-                         then "Module " ++ mname
-                         else show entity ++ " " ++ mname ++ "." ++ ename) ++
+                         then bold "Module" ++ " " ++ code mname
+                         else bold (show entity) ++ " " ++
+                              code (mname ++ "." ++ ename)) ++
                       " (package " ++ pname ++ "-" ++ vers ++ ")"
-  putStrLn edescr
+  putStrLn (addBreak edescr)
   let requests = if null (optRequest opts1)
                    then if null ename && not (optAll opts1)
                           then [ "classes", "types", "operations" ]
@@ -213,6 +214,15 @@ queryModuleEntity opts0 mname ename = do
                        , optRequest = requests }
   callCurryInfo opts2 (curryInfoOptions opts2)
  where
+  -- Bold text when markdown option is set:
+  bold s = if optMarkdown opts0 then "__" ++ s ++ "__" else s
+
+  -- Code string when markdown option is set:
+  code s = if optMarkdown opts0 then "`" ++ s ++ "`" else s
+
+  -- Add a markdown line break, if required:
+  addBreak s = s ++ if optMarkdown opts0 then "  " else ""
+
   getPackageVersion opts = do
     setCurryPathIfNecessary
     mbsrc <- lookupModuleSourceInLoadPath mname
@@ -280,11 +290,13 @@ curryInfoCmd opts ciopts =
           map (\(o,v) -> if null v then o else o ++ '=' : v)
               (addOptions (("--verbosity", show (optVerb opts)) : ciopts)))
  where
-  addOptions = addCacheOption . addColorOption
+  addOptions = addCacheOption . addTextFormatOption
 
-  -- Add the option `--color` to a list of `curry-info` options, if demanded.
-  addColorOption ncopts =
-    if optColor opts then ("--color","") : ncopts else ncopts
+  -- Add the option `--color` or `--markdown` to a list of `curry-info` options,
+  -- if demanded.
+  addTextFormatOption ncopts | optMarkdown opts = ("--markdown","") : ncopts
+                             | optColor opts    = ("--color","") : ncopts
+                             | otherwise        = ncopts
 
   -- Add the option `--cache` to a list of `curry-info` options
   -- if the `curryInfoCache` is not null.
