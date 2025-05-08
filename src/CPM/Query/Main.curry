@@ -25,8 +25,8 @@ module CPM.Query.Main
 import Control.Monad      ( unless, when, replicateM, void )
 import Data.List          ( intercalate, nubBy )
 import System.Environment ( getArgs )
-import System.IO          ( getContents, hFlush, stderr, hClose, hGetLine
-                          , hPutStr, hPutStrLn )
+import System.IO          ( getContents, hFlush, stderr, stdout, hClose
+                          , hGetLine, hPutStr, hPutStrLn )
 
 import FlatCurry.Types    ( QName )
 import Network.Socket     ( connectToSocket )
@@ -51,7 +51,7 @@ import CPM.Query.Options
 banner :: String
 banner = unlines [bannerLine, bannerText, bannerLine]
  where
-  bannerText = "CPM Query Tool (Version of 07/05/25)"
+  bannerText = "CPM Query Tool (Version of 08/05/25)"
   bannerLine = take (length bannerText) (repeat '=')
 
 main :: IO ()
@@ -60,7 +60,7 @@ main = do
   unless (optRemote opts) checkExecutable
   when (optEntity opts == Unknown) $ do
     printWhenStatus opts $
-      "No information for entity of kind '" ++ optCLS opts ++ "'"
+      "No information for this kind of entity (" ++ optCLS opts ++ ")"
     exitWith 0
   let genfile = optGenFrom opts
   case args of
@@ -182,23 +182,19 @@ generateForModule opts pkg vsn mn = do
 -- is not provided.
 queryModuleEntity :: Options -> String -> String -> IO ()
 queryModuleEntity opts0 mname ename = do
-  let opts1 = opts0 { optModule = mname, optEName = ename }
+  let opts1   = opts0 { optModule = mname, optEName = ename }
+      entity  = optEntity opts1
+      estring = if null ename
+                  then bold "Module" ++ " " ++ code mname
+                  else bold (show entity) ++ " " ++
+                       code (mname ++ "." ++ ename)
   (pname,vers) <- if null (optPackage opts1) || null (optVersion opts1)
-                    then getPackageVersion opts1
+                    then getPackageVersion opts1 estring
                     else return (optPackage opts1, optVersion opts1)
   -- do something with package, version, module, and function:
-  let entity = optEntity opts1
-      edescr = if optVerb opts1 > 1
-                 then unlines [ "Package name   : " ++ pname
-                              , "Package version: " ++ vers
-                              , "Module name    : " ++ mname
-                              , "Entity name    : " ++ ename ]
-                 else (if null ename
-                         then bold "Module" ++ " " ++ code mname
-                         else bold (show entity) ++ " " ++
-                              code (mname ++ "." ++ ename)) ++
-                      " (package " ++ pname ++ "-" ++ vers ++ ")"
+  let edescr = estring ++ " (package " ++ pname ++ "-" ++ vers ++ ")"
   putStrLn (addBreak edescr)
+  hFlush stdout -- required for KiCS2
   let requests = if null (optRequest opts1)
                    then if null ename && not (optAll opts1)
                           then [ "classes", "types", "operations" ]
@@ -223,21 +219,21 @@ queryModuleEntity opts0 mname ename = do
   -- Add a markdown line break, if required:
   addBreak s = s ++ if optMarkdown opts0 then "  " else ""
 
-  getPackageVersion opts = do
+  getPackageVersion opts estring = do
     setCurryPathIfNecessary
     mbsrc <- lookupModuleSourceInLoadPath mname
     case mbsrc of
       Nothing -> error $ "Module '" ++ mname ++ "' not found!"
       Just (dirname,filename) -> do
         getPackageVersionOfDirectory dirname >>= maybe
-          (printWhenStatus opts
+          (putStrLn (addBreak estring) >> printWhenStatus opts
             ("Module '" ++ mname ++ "' " ++
             (if optVerb opts > 1
                 then  "stored in file\n  " ++ filename ++
                       "\nbut this does not belong to the sources of a "
                 else "does not belong to a ") ++
             "registered CPM package!") >> exitWith 0)
-         return
+          return
 
 -- Query a package specified in the option argument.
 queryPackage :: Options -> IO ()
